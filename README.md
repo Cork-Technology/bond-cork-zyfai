@@ -4,6 +4,15 @@ Express server exposing an **ERC-4337 Safe smart wallet** on **Arbitrum One**, c
 
 For the full project context (what the three teams are building together and how the pieces fit), see [`PROJECT.md`](./PROJECT.md).
 
+## Repository layout
+
+This repo is a monorepo with two independent parts:
+
+- **`/` (this directory)** — the Zyfai agent server documented below (TypeScript / Node / Express).
+- **[`contracts/`](./contracts/)** — Cork's market-creation and 1inch Limit Order Protocol v4 integration (Solidity / Foundry): the `CorkMarketCreator`, `CorkLimitOrderAdapter`, and the fixed-rate oracle, plus the `cork-operations` agent skill and the off-chain ceremony examples. It has its own README, `CLAUDE.md`, and Foundry toolchain — build it with `forge` from inside `contracts/`.
+
+The two parts share no build. Node tooling governs the root; Foundry governs `contracts/`. After cloning, run `git submodule update --init --recursive` to fetch the Foundry dependencies under `contracts/lib/`.
+
 ---
 
 ## What this server does
