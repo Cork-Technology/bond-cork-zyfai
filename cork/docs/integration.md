@@ -17,10 +17,14 @@ There is no caller restriction — any address (a contract or a regular account)
 
 | Contract | Address |
 |---|---|
-| `CorkMarketCreator` | _to be filled in after deployment_ |
-| `FixedRateOracleFactory` | _to be filled in after deployment_ |
-| `DefaultCorkController` (Cork) | _to be filled in after deployment_ |
-| `CorkPoolManager` (Cork) | _to be filled in after deployment_ |
+| `CorkMarketCreator` | `0x4B5B91cF4d1DAdb7439beB68926c86D2D8C68dBC` |
+| `FixedRateOracleFactory` | `0x1050e67e37447e0D5686B3ee972a2c6dDB433295` |
+| `CorkLimitOrderAdapter` | `0xc915B0776189E5Fa021C60D76Da0c8D7F1997801` |
+| `DefaultCorkController` (Cork) | `0x8974fF6ef0eFCc143C01C6A596b026FdEB9Ff350` |
+| `CorkPoolManager` (Cork) | `0xc2De56fb1C7a85250ce69C37B4773767C77954AE` |
+| 1inch Limit Order Protocol v4 | `0x111111125421cA6dc452d289314280a0f8842A65` |
+
+Live and Arbiscan-verified on the shadow Phoenix instance (Arbitrum One, chain id `42161`). `POOL_CREATOR_ROLE` is already granted to `CorkMarketCreator`, so market creation is permissionless — no role-grant step. The canonical address book is [`.claude/skills/cork-operations/references/addresses.md`](../../.claude/skills/cork-operations/references/addresses.md).
 
 ## The entry point
 
