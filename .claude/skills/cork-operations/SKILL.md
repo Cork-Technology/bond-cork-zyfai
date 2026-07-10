@@ -60,7 +60,7 @@ takers read it off the book and branch — the wrong variant reverts `BadSignatu
   the new order's amount.
 - Counter-offers are NEW orders, never on-chain cancels; a superseded order stays fillable
   until it expires, so every bid/ask in a negotiation MUST set an expiry in its maker traits
-  (`orderExpiry()` in `docs/examples/lib.mjs`; the protocol reverts `OrderExpired` past it).
+  (`orderExpiry()` in `contracts/docs/examples/lib.mjs`; the protocol reverts `OrderExpired` past it).
 - Always use named struct fields — `PoolCreationParams` puts the unwind fee BEFORE the swap
   fee; positional arguments are a known footgun.
 - Markets that will carry JIT orders MUST be created with `isWhitelistEnabled: false`, or

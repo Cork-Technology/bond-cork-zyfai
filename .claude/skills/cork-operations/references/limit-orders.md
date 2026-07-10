@@ -1,17 +1,17 @@
 # Coverage orders — the ceremony, JIT-first
 
-<!-- Sources of truth: docs/examples/ — ceremony.md (flow + account-type rule),
+<!-- Sources of truth: contracts/docs/examples/ — ceremony.md (flow + account-type rule),
      contract-maker.md (contract makers, real-Safe note), lib.mjs (ALL byte plumbing:
      extension encoding, salt commitment, maker/taker traits, orderExpiry/expiryOf, EIP-712 +
      compact signatures, KNOWN_ERRORS_ABI), the order-shape scripts named per section, and
-     src/CorkLimitOrderAdapter.sol for hook semantics. The examples are fork-proven against
+     contracts/src/CorkLimitOrderAdapter.sol for hook semantics. The examples are fork-proven against
      the REAL 1inch protocol and the REAL CorkPoolManager — trust them over any restatement. -->
 
 Orders rest on the 1inch Limit Order Protocol v4 (address: `references/addresses.md`); the
-Cork API is the book. **Never re-derive byte plumbing** — import from `docs/examples/lib.mjs`
+Cork API is the book. **Never re-derive byte plumbing** — import from `contracts/docs/examples/lib.mjs`
 (`buildExtension`, `saltForExtension`, `packTargetAndData`, `buildMakerTraits`,
 `buildTakerTraits`, `orderExpiry`, `orderTypedData`, `toCompactSignature`, the fill ABIs, and
-`KNOWN_ERRORS_ABI` + `failWith` for decoded reverts). Run scripts from `docs/examples/`
+`KNOWN_ERRORS_ABI` + `failWith` for decoded reverts). Run scripts from `contracts/docs/examples/`
 (node 20+, `npm i viem` there first — this creates `package.json`/`node_modules` in that
 directory; delete them when done if the repo must stay clean). Point `STATE_FILE`/`ORDER_FILE`
 at a scratch directory outside the repo, or the default handoff JSON lands next to the
@@ -26,17 +26,17 @@ Market creation IS the request for quote. The five moves:
 2. **Bid** — the asker posts an opening BUY bid: `makerAsset = CA` (premium offered),
    `takerAsset = cST` (size wanted). **Deliberately plain-shaped — no extension.** Taker-side
    JIT is the lifter's own UNSIGNED choice attached as fill `args`; the bidder signs nothing
-   about it. Script for steps 1+2 in one go: `docs/examples/market-rfq.mjs`.
+   about it. Script for steps 1+2 in one go: `contracts/docs/examples/market-rfq.mjs`.
 3. **Discover** — the underwriter polls the book (or the file handoff) for new markets and
    resting bids, and prices them: bid at/above floor → take; below → counter.
 4. **Counter** — the underwriter posts a NEW SELL ask at its price with the adapter committed
    in the SIGNED extension (maker-side JIT: it will owe cST at fill). Nothing is cancelled.
 5. **Fill** — whoever moves first ends the negotiation: the asker fills the ask
-   (`docs/examples/jit-fill.mjs`), or the underwriter lifts the bid
-   (`docs/examples/lift-bid.mjs`).
+   (`contracts/docs/examples/jit-fill.mjs`), or the underwriter lifts the bid
+   (`contracts/docs/examples/lift-bid.mjs`).
 
 The whole loop — both discovery modes, both account types — is one runnable script:
-**`docs/examples/ceremony-e2e.mjs`**; prose walkthrough: `docs/examples/ceremony.md`.
+**`contracts/docs/examples/ceremony-e2e.mjs`**; prose walkthrough: `contracts/docs/examples/ceremony.md`.
 
 Two JIT recipes — do not merge them:
 
@@ -50,7 +50,7 @@ premium; the market holds the locked collateral until expiry.
 
 ## Adapter extension recipe (primary path — maker-side JIT ask)
 
-Exact bytes: `docs/examples/jit-order.mjs` (maker) / `jit-fill.mjs` (taker) /
+Exact bytes: `contracts/docs/examples/jit-order.mjs` (maker) / `jit-fill.mjs` (taker) /
 `lift-bid.mjs` (taker-side JIT). The shape, so you can recognize it:
 
 - extension pre-interaction slot = adapter address ++ `abi.encode(poolId)` — build with
@@ -89,9 +89,9 @@ Takers: read `makerAccountType` off the book and branch — never assume. The wr
 reverts `BadSignature`. Both fill ABIs are exported by `lib.mjs`. A contract maker's OWNER
 signs the raw EIP-712 order hash (`owner.sign({ hash: orderHash })`); a real Safe differs — it
 wraps the hash in its own SafeMessage envelope first and approvals go through
-`execTransaction` — see `docs/examples/contract-maker.md`. Scripts:
-`docs/examples/contract-order.mjs` (maker; `VARIANT=PLAIN|JIT`) / `contract-fill.mjs` (taker).
-Fork proof: `test/fork/ContractMakerFill.fork.t.sol`.
+`execTransaction` — see `contracts/docs/examples/contract-maker.md`. Scripts:
+`contracts/docs/examples/contract-order.mjs` (maker; `VARIANT=PLAIN|JIT`) / `contract-fill.mjs` (taker).
+Fork proof: `contracts/test/fork/ContractMakerFill.fork.t.sol`.
 
 ## Negotiation: new orders, never cancels
 
@@ -153,7 +153,7 @@ plain), `side` (`"BUY"|"SELL"` — BUY offers CA for cST, SELL offers cST for CA
 `nonce` (string), `allowsPartialFills` (boolean), `chainId`. A 201 returns `{orderHash}` and
 the order rests; a 400 "commitment mismatch" means the salt does not commit to the extension
 — a POST-time save from a guaranteed on-chain `InvalidExtensionHash`. Exact payload
-construction: `orderPayload()` in `docs/examples/ceremony-e2e.mjs`.
+construction: `orderPayload()` in `contracts/docs/examples/ceremony-e2e.mjs`.
 
 Trust rule: the orderbook is discovery only — before filling, verify on-chain: maker CA/cST
 balance and allowances, order not expired (`expiryOf(makerTraits)`), and remaining fillability
@@ -194,8 +194,8 @@ No extension, no adapter, no JIT: use when the maker ALREADY HOLDS the asset it 
 underwriter that pre-minted cST via `deposit`). Plain traits (expiry + nonce + fill flags
 only), any unique salt, empty `extension` in the POST. Cost: capital sits locked while the
 order rests; an unfilled expiry leaves you holding cPT + cST to unwind. Scripts:
-`docs/examples/plain-order.mjs` (`SIDE=SELL|BUY`) / `plain-fill.mjs`; walkthrough
-`docs/examples/plain-order.md`.
+`contracts/docs/examples/plain-order.mjs` (`SIDE=SELL|BUY`) / `plain-fill.mjs`; walkthrough
+`contracts/docs/examples/plain-order.md`.
 
 A later phase ("CGB": Cork-owned settlement, premium-APY pricing, maker hooks, N-order fills)
 exists but is not live; this file covers the live adapter path.

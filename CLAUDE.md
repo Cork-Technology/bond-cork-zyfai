@@ -19,6 +19,9 @@ first.
 contracts/         Cork market-creation + 1inch Limit Order Protocol (LOP) v4 integration
                    — Solidity / Foundry. Its own Foundry root, README, and CLAUDE.md.
                    Build/test with `forge` from inside contracts/.
+
+.claude/skills/    cork-operations — the agent playbook for operating Cork Phoenix.
+                   Root-level, so a Claude agent in this repo discovers it automatically.
 ```
 
 The two parts have separate toolchains and never share a build. Node tooling
@@ -34,13 +37,10 @@ The two parts have separate toolchains and never share a build. Node tooling
 
 ## Operating Cork autonomously
 
-The agent-facing playbook lives at
-[`contracts/.claude/skills/cork-operations/`](./contracts/.claude/skills/cork-operations/).
-It carries the decision rules to create markets, run pool actions, and trade cST
-coverage through the ceremony (just-in-time orders on 1inch LOP v4). Its `references/`
-hold the live Arbitrum One address book and the Cork Phoenix API guide.
-
-Note: this skill sits under `contracts/.claude/` so its relative links to
-`docs/examples/*.mjs` stay valid. To make it a root-discoverable project skill, it
-can be hoisted to the repo root `.claude/skills/` in a follow-up (which requires
-re-pointing those `docs/examples/` links to `contracts/docs/examples/`).
+The agent-facing playbook is the root-level skill
+[`.claude/skills/cork-operations/`](./.claude/skills/cork-operations/) — discoverable as
+the `cork-operations` skill from this repo root. It carries the decision rules to create
+markets, run pool actions, and trade cST coverage through the ceremony (just-in-time
+orders on 1inch LOP v4). Its `references/` hold the live Arbitrum One address book and
+the Cork Phoenix API guide, and it points at the runnable off-chain examples under
+`contracts/docs/examples/`.

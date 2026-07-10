@@ -73,7 +73,7 @@ or docs/examples/ must update this graph in the same change.
 - **walkthroughs** (`docs/examples/ceremony.md`, `plain-order.md`, `jit-order.md`, `contract-maker.md`) — prose companions to the scripts, one per order shape
 
 ### Skills
-- **cork-operations** (`.claude/skills/cork-operations/SKILL.md`) — operating skill: mental model, decision table, safety rails; addresses and API reference live in its `references/`
+- **cork-operations** (`../.claude/skills/cork-operations/SKILL.md`) — operating skill: mental model, decision table, safety rails; addresses and API reference live in its `references/`
 
 ### Edges
 - CorkMarketCreator --imports--> FixedRateOracleFactory
@@ -130,7 +130,7 @@ or docs/examples/ must update this graph in the same change.
 - 1inch Limit Order Protocol v4: `0x111111125421cA6dc452d289314280a0f8842A65` — canonical, same
   address on Ethereum mainnet and Arbitrum One (`src/interfaces/I1inchLimitOrderProtocol.sol`, `docs/examples/lib.mjs`).
 - Chain: Arbitrum One, chain id 42161. Cork addresses are LIVE on the shadow Phoenix instance
-  as of 2026-07-10, pinned in `.claude/skills/cork-operations/references/addresses.md` (the
+  as of 2026-07-10, pinned in `../.claude/skills/cork-operations/references/addresses.md` (the
   single address book; `POOL_CREATOR_ROLE` already granted). Note the address table in
   `docs/integration.md` still shows pre-deployment placeholders.
 - Cork Phoenix API base: `https://api-phoenix.cork.tech`, everything under `/v1`: GET `/v1/pools/`,
@@ -147,4 +147,4 @@ or docs/examples/ must update this graph in the same change.
 | Market-creation integration (parameters, precompute, reverts) | `docs/integration.md` |
 | Fork testing setup (env gating, throwaway Phoenix stack) | `docs/fork-testing.md` |
 | Ceremony walkthroughs and order shapes | `docs/examples/README.md` |
-| Operating markets/pools/orders and the Phoenix API | `.claude/skills/cork-operations/` references |
+| Operating markets/pools/orders and the Phoenix API | `../.claude/skills/cork-operations/` references |

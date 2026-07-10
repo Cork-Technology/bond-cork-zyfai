@@ -1,7 +1,7 @@
 # Addresses — the single address book
 
-<!-- Sources of truth: Slack live-deployment announcement (2026-07-10), docs/integration.md,
-     script/Deploy.s.sol, docs/examples/lib.mjs (LOP_ADDRESS), docs/fork-testing.md. -->
+<!-- Sources of truth: Slack live-deployment announcement (2026-07-10), contracts/docs/integration.md,
+     contracts/script/Deploy.s.sol, contracts/docs/examples/lib.mjs (LOP_ADDRESS), contracts/docs/fork-testing.md. -->
 
 Chain: **Arbitrum One, chain id 42161**. Everything below is LIVE and Arbiscan-verified, on the
 **SHADOW Phoenix instance** — distinct CREATE2 salts, fully isolated from canonical Phoenix;
@@ -52,13 +52,13 @@ The live addresses above are the default. For isolated testing, everything also 
 anvil fork of Arbitrum One (the real 1inch protocol is already at its canonical address on
 any fork):
 
-1. **Phoenix stack** — follow `docs/fork-testing.md` Option B exactly: start
+1. **Phoenix stack** — follow `contracts/docs/fork-testing.md` Option B exactly: start
    `anvil --fork-url <arbitrum-rpc> --port 8545 --disable-code-size-limit`, then run
    `ThrowawayDeploy.s.sol` from a phoenix-private clone. It prints `CONTROLLER`,
    `POOL_MANAGER`, `ADMIN`. The admin is the script's broadcaster (`THROWAWAY_PK` — anvil's
    default account 0); that same key is `<admin-pk>` in the next step.
 2. **This repo's contracts** — from the repo root:
-   `CONTROLLER=... POOL_MANAGER=... LOP=0x111111125421cA6dc452d289314280a0f8842A65 forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --private-key <admin-pk>`
+   `CONTROLLER=... POOL_MANAGER=... LOP=0x111111125421cA6dc452d289314280a0f8842A65 forge script contracts/script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --private-key <admin-pk>`
    It prints the factory, creator, and adapter addresses, plus the
    `grantRole(POOL_CREATOR_ROLE, creator)` call the admin must then send on the controller.
    The printed `cast send` is a template, not literally runnable: replace

@@ -9,7 +9,8 @@ For the full project context (what the three teams are building together and how
 This repo is a monorepo with two independent parts:
 
 - **`/` (this directory)** — the Zyfai agent server documented below (TypeScript / Node / Express).
-- **[`contracts/`](./contracts/)** — Cork's market-creation and 1inch Limit Order Protocol v4 integration (Solidity / Foundry): the `CorkMarketCreator`, `CorkLimitOrderAdapter`, and the fixed-rate oracle, plus the `cork-operations` agent skill and the off-chain ceremony examples. It has its own README, `CLAUDE.md`, and Foundry toolchain — build it with `forge` from inside `contracts/`.
+- **[`contracts/`](./contracts/)** — Cork's market-creation and 1inch Limit Order Protocol v4 integration (Solidity / Foundry): the `CorkMarketCreator`, `CorkLimitOrderAdapter`, the fixed-rate oracle, and the off-chain ceremony examples under `contracts/docs/examples/`. It has its own README, `CLAUDE.md`, and Foundry toolchain — build it with `forge` from inside `contracts/`.
+- **[`.claude/skills/cork-operations/`](./.claude/skills/cork-operations/)** — the agent playbook for operating Cork Phoenix on Arbitrum One (market creation, pool actions, the cST coverage ceremony). A root-level skill so a Claude agent working in this repo discovers it automatically.
 
 The two parts share no build. Node tooling governs the root; Foundry governs `contracts/`. After cloning, run `git submodule update --init --recursive` to fetch the Foundry dependencies under `contracts/lib/`.
 
