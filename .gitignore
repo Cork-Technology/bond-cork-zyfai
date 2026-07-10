@@ -1,8 +1,11 @@
-# Dependencies
-node_modules/
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
 
-# Build output
-dist/
+# Dependencies / build output (per-agent tooling; belt-and-suspenders)
+**/node_modules/
+**/dist/
 *.tsbuildinfo
 
 # Environment
@@ -13,11 +16,3 @@ dist/
 # Logs
 *.log
 npm-debug.log*
-
-# Editor
-.vscode/
-.idea/
-.DS_Store
-
-# Coverage
-coverage/

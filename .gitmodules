@@ -1,0 +1,6 @@
+[submodule "cork/lib/forge-std"]
+	path = cork/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "cork/lib/phoenix"]
+	path = cork/lib/phoenix
+	url = https://github.com/Cork-Technology/phoenix
