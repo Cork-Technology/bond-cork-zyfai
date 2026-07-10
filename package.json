@@ -1,0 +1,37 @@
+{
+  "name": "zyfai-agent-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zyfai agent server: Express API exposing an ERC-4337 Safe smart wallet on Arbitrum One, sponsored by Pimlico. Built for the bond.credit x Cork x Zyfai hackathon pilot.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"*.md\""
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "permissionless": "^0.2.55",
+    "pino": "^9.7.0",
+    "pino-pretty": "^13.0.0",
+    "viem": "^2.31.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.5",
+    "@typescript-eslint/eslint-plugin": "^8.20.0",
+    "@typescript-eslint/parser": "^8.20.0",
+    "eslint": "^8.57.1",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
