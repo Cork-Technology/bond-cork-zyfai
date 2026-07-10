@@ -1,21 +1,21 @@
-name: Contracts CI
+name: Cork CI
 
 permissions: {}
 
 on:
   push:
     paths:
-      - "contracts/**"
-      - ".github/workflows/contracts.yml"
+      - "cork/**"
+      - ".github/workflows/cork.yml"
   pull_request:
     paths:
-      - "contracts/**"
-      - ".github/workflows/contracts.yml"
+      - "cork/**"
+      - ".github/workflows/cork.yml"
   workflow_dispatch:
 
 defaults:
   run:
-    working-directory: contracts
+    working-directory: cork
 
 jobs:
   check:

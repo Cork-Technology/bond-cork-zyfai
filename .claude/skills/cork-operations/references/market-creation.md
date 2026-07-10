@@ -1,7 +1,7 @@
 # Market creation — `CorkMarketCreator.createMarket`
 
-<!-- Sources of truth: contracts/docs/integration.md + contracts/src/CorkMarketCreator.sol, contracts/src/FixedRateOracleFactory.sol
-     in this repo. Runnable reference: contracts/docs/examples/market-rfq.mjs (create + opening bid). -->
+<!-- Sources of truth: cork/docs/integration.md + cork/src/CorkMarketCreator.sol, cork/src/FixedRateOracleFactory.sol
+     in this repo. Runnable reference: cork/docs/examples/market-rfq.mjs (create + opening bid). -->
 
 Creation is permissionless — any address can call (the live `CorkMarketCreator` already holds
 `POOL_CREATOR_ROLE` on the controller; no grant step). The wrapper deploys a `FixedRateOracle` for
@@ -113,7 +113,7 @@ const poolId = created.args.id;   // this is the MarketId every other call takes
 ```
 
 Runnable end-to-end version (creation + the ceremony's opening bid in one script):
-`contracts/docs/examples/market-rfq.mjs`.
+`cork/docs/examples/market-rfq.mjs`.
 
 ## Revert catalog
 
