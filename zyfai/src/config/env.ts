@@ -13,6 +13,7 @@ const envSchema = z.object({
   SHARED_EOA_PRIVATE_KEY: hexPrivateKey,
   PIMLICO_API_KEY: z.string().min(1, 'PIMLICO_API_KEY is required'),
   ALCHEMY_RPC_URL: z.string().url('ALCHEMY_RPC_URL must be a valid URL'),
+  ORDERBOOK_URL: z.string().url().default('https://api-phoenix.cork.tech'),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1,0 +1,157 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Brand design tokens — private bank that runs a terminal.
+   Serif institution, mono machine, quiet paper. */
+:root {
+  --paper: #ffffff;
+  --beige: #e8e7e2;
+  --ink: #121212;
+  --surface-1: #1a1a1c;
+  --surface-2: #232327;
+
+  --blue-institution: #27279e;
+  --blue-action: #0055d9;
+  --accent-on-dark: #6fa0f7;
+
+  --text-on-light: #121212;
+  --sub-on-light: #5b6169;
+  --text-on-dark: #ffffff;
+  --sub-on-dark: #c5ccd4;
+
+  --success: #3ecf8e;
+  --danger: #f2555a;
+
+  --hairline-dark: rgba(255, 255, 255, 0.08);
+  --hairline-light: rgba(18, 18, 18, 0.14);
+
+  --font-display: "Libre Baskerville", Georgia, serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius-brand: 4px;
+
+  /* shadcn mapping — dark terminal world */
+  --background: var(--ink);
+  --foreground: var(--text-on-dark);
+  --card: var(--surface-1);
+  --card-foreground: var(--text-on-dark);
+  --popover: var(--surface-1);
+  --popover-foreground: var(--text-on-dark);
+  --primary: var(--blue-action);
+  --primary-foreground: var(--text-on-dark);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text-on-dark);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--sub-on-dark);
+  --accent: var(--accent-on-dark);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --border: var(--hairline-dark);
+  --input: var(--surface-2);
+  --ring: var(--accent-on-dark);
+  --radius: var(--radius-brand);
+
+  --chart-1: var(--blue-action);
+  --chart-2: var(--accent-on-dark);
+  --chart-3: var(--success);
+  --chart-4: var(--danger);
+  --chart-5: var(--blue-institution);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-paper: var(--paper);
+  --color-beige: var(--beige);
+  --color-ink: var(--ink);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-blue-institution: var(--blue-institution);
+  --color-blue-action: var(--blue-action);
+  --color-accent-on-dark: var(--accent-on-dark);
+  --color-sub-on-dark: var(--sub-on-dark);
+  --color-sub-on-light: var(--sub-on-light);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body);
+  }
+  html {
+    @apply font-sans;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+  }
+  code,
+  pre,
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Grain overlay — apply to colour fields >= 200px only */
+.grain {
+  position: relative;
+}
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Utility hairlines */
+.hairline {
+  border-color: var(--hairline-dark);
+}
+.hairline-light {
+  border-color: var(--hairline-light);
+}
+
+/* Command button style */
+.command {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
