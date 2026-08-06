@@ -13,9 +13,13 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
-    "format": "prettier --write \"src/**/*.ts\" \"*.md\""
+    "format": "prettier --write \"src/**/*.ts\" \"*.md\"",
+    "provision:account": "tsx src/scripts/provision-account.ts",
+    "cover": "tsx src/scripts/cover.ts",
+    "buy:cover": "tsx src/scripts/buy-cover.ts"
   },
   "dependencies": {
+    "@rhinestone/sdk": "^2.2.1",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "permissionless": "^0.2.55",
