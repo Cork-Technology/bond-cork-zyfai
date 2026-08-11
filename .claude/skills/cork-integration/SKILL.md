@@ -15,6 +15,9 @@ reads live state, so the skill's job is wiring, sequencing, and guardrails.
 Requires the cork-cli MCP server at the pinned tag **`v0.1.0-rc.3`**. Install
 and MCP registration:
 [quickstart §"the integration kit"](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/docs/zyfai-quickstart.md).
+Known drift in that quickstart: its example outputs show the superseded `0.3.2`
+contract generation ([cork-cli#1](https://github.com/Cork-Technology/cork-cli/issues/1))
+— never treat an address printed there as current; read addresses live.
 Self-test: a healthy install answers **exactly 9 tools**. If it doesn't, fix
 the install before doing anything else — do not work around a partial surface.
 

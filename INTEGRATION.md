@@ -17,6 +17,17 @@ form — is the
 this runbook is the spine that tells you what to do, in what order, and who owns
 what.
 
+> **Known drift in that quickstart** (tracked as
+> [cork-cli#1](https://github.com/Cork-Technology/cork-cli/issues/1), warning
+> removed here once a refreshed tag lands): its status block and example
+> outputs were captured against market-registry `0.3.2`; this Distribution pins
+> `0.3.3`, which redeployed the registry, adapter and all three recipe
+> contracts at new addresses, and its "Base is pre-first-market /
+> `roles_not_granted`" framing is resolved. The *flow* it teaches is correct
+> and the tool's defaults are current — but treat every address printed in it
+> as retired and pull the real ones live (`ch query`). Full detail in the
+> "Do not" list below.
+
 ## What you are integrating, in one paragraph
 
 Cork lets your agent hold a high-yield USDC position its risk gate would
@@ -108,13 +119,11 @@ line, announced in advance.
   CREATE2 property, not a chain signal; select the chain explicitly.
 - **Do not trust any document over the manifest** on versions or addresses —
   and **never copy an address out of a doc's example output**. Known instance
-  today: the pinned quickstart was written against market-registry `0.3.2`; the
-  Distribution pins `0.3.3`, which redeployed the registry, the adapter and all
-  three recipe contracts at new addresses. The quickstart's worked examples
-  therefore show retired addresses, and its "Base is pre-first-market /
-  `roles_not_granted`" framing is resolved. The tool itself is current (its
-  defaults carry 0.3.3 and self-update), and the quickstart's own rule covers
-  you: pull authoritative values from `ch query`, never from prose.
+  today: the pinned quickstart's `0.3.2` drift called out at the top of this
+  document ([cork-cli#1](https://github.com/Cork-Technology/cork-cli/issues/1)).
+  The tool itself is current (its defaults carry 0.3.3 and self-update), and
+  the quickstart's own rule covers you: pull authoritative values from
+  `ch query`, never from prose.
 - **Do not use anything from this repository's git history.** The pre-August
   material targets deleted entrypoints and dead deployments.
 

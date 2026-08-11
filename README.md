@@ -39,7 +39,7 @@ from the tool (`ch query protocol-config`).
 | You want | Read |
 |---|---|
 | The integration path, start to finish | [`INTEGRATION.md`](./INTEGRATION.md) — the runbook for this workspace |
-| The full walkthrough with runnable commands | [Zyfai quickstart](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/docs/zyfai-quickstart.md) (pinned to the released `cork-cli` tag) |
+| The full walkthrough with runnable commands | [Zyfai quickstart](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/docs/zyfai-quickstart.md) (pinned to the released `cork-cli` tag) — **known drift**: its example outputs show the superseded `0.3.2` contract generation ([cork-cli#1](https://github.com/Cork-Technology/cork-cli/issues/1)); the flow is correct, the printed addresses are not — read them live |
 | The CLI / MCP command reference | [`ch` reference](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/docs/cli.md) |
 | The venue / indexer API | [api-phoenix.cork.tech/docs](https://api-phoenix.cork.tech/docs) |
 | The receiver-forcing adapter you will deploy | [`cork-periphery`](https://github.com/Cork-Technology/cork-periphery/tree/v0.1.1) at `v0.1.1` |
