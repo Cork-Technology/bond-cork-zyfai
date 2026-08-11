@@ -47,7 +47,11 @@ Signing and key custody stay in the caller's stack, always.
    it, stop and surface the mismatch instead of picking a side silently.
 4. **Verify before submit.** Run the `cork_track` verification/simulation on a
    prepared artifact before it is signed, and never call `cork_submit` with a
-   payload you did not just verify.
+   payload you did not just verify. Every prepared artifact carries a
+   `data.execution` block naming its exact completion path; the signing guide
+   is `cork_capabilities topic:"signing"`. Note `cork_submit` relays venue
+   postings (RFQs, orders) — a *fill* is signed and broadcast from the caller's
+   own stack, never through the tool.
 5. **A reason code is an answer, not an error.** `unavailable`,
    `chain_read_failed`, `roles_not_granted` and similar are documented states —
    report them as findings; do not retry-loop or fabricate the missing result.

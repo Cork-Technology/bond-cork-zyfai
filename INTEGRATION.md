@@ -21,12 +21,14 @@ what.
 
 Cork lets your agent hold a high-yield USDC position its risk gate would
 otherwise exclude, by buying **cST** — per-market cover that swaps the covered
-(reference) asset for the collateral asset at a fixed rate, any time before the
-market's expiry. Your agent requests quotes off-chain (RFQ, request-for-quote),
-the underwriter answers with a signed 1inch limit order, and the fill settles
-everything atomically on-chain — the market itself is created just-in-time by
-the fill if it doesn't exist yet. If the underlying impairs, your agent
-exercises the cST on-chain. Full model and glossary: quickstart §1–§2.
+(reference) asset for the collateral asset at the market's tracked rate, any
+time before the market's expiry. Your agent requests quotes off-chain (RFQ,
+request-for-quote), the underwriter answers with priced options and rests a
+signed 1inch limit order, and your fill of that order settles everything
+atomically on-chain — the market itself is created just-in-time by the fill if
+it doesn't exist yet. If the underlying impairs, your agent exercises the cST
+on-chain — a direct call that needs no counterparty, so it works exactly when
+the market is stressed. Full model and glossary: quickstart §1–§2.
 
 ## The path
 
@@ -38,11 +40,12 @@ Work the steps in order. Each is small; nothing here should take a day.
 | 2 | **Install `cork-cli` at the pinned tag** (`v0.1.0-rc.3`) and add its MCP server to your agent. | Quickstart §4 (the integration kit) |
 | 3 | **Self-test the install.** A healthy install answers exactly **9 tools**; 8 are read-only, only `cork_submit` writes. Expected-failure reason codes (`chain_read_failed`, `unavailable`, …) are documented answers, not broken installs. | [cork-cli README](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/README.md) |
 | 4 | **Read live state on Base** — `ch query protocol-config`, registered assets, recipes. This is where addresses come from, every time. | Quickstart §3; [`ch` reference](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/docs/cli.md) |
-| 5 | **Walk the cover flow end to end** on Base: derive the market, request a quote, build the unsigned order artifacts, simulate, sign in *your* stack, submit the fill. The tooling never signs and never holds funds. | Quickstart §2–§3 |
-| 6 | **Deploy your own receiver-forcing adapter** from `cork-periphery v0.1.1` (`CorkForSelfAdapter` is the one to deploy: one address to audit, whitelist and approve). Audit and vet it first — see the trust boundary below. | [`cork-periphery`](https://github.com/Cork-Technology/cork-periphery/tree/v0.1.1) README |
-| 7 | **Whitelist the adapter's selectors in your Guarded Executor** — and only those. The adapter exists because your whitelist constrains contract + function, not arguments. | `cork-periphery` README ("The problem these solve", allowance matrix) |
-| 8 | **Run one full cover cycle at pilot size** — buy cover, hold, exercise or let expire, reconcile via `ch track` and the venue API. | Quickstart §3, §6; [API docs](https://api-phoenix.cork.tech/docs) |
-| 9 | **Close the loop with Cork** — the checklist at the bottom of this document, both directions. | Below |
+| 5 | **Walk the cover flow end to end** on Base: derive the market, open the RFQ, verify and simulate the underwriter's order, then sign and broadcast the fill **from your own stack** — the tooling builds unsigned artifacts and relays venue postings; it never signs, never broadcasts a fill, never holds funds. An unanswered RFQ means no underwriter is quoting that pair yet — coordination, not an error; raise it. Confirm the RFQ package catalog and notional units with Cork before the first post. | Quickstart §2–§3 |
+| 6 | **Read quickstart §5 (Risks & ownership) in full** before touching the whitelist. Items A–C are the security core: the receiver argument your whitelist can't see, the pool whitelist being off by construction, and which spender each approval goes to. D–G (no slippage guard on exercise, REF pauses freezing cover, reconcile discipline, address drift) shape your monitoring. | Quickstart §5 |
+| 7 | **Deploy your own receiver-forcing adapter** from `cork-periphery v0.1.1` (`CorkForSelfAdapter` is the one to deploy: one address to audit, whitelist and approve). Audit and vet it first — see the trust boundary below. | [`cork-periphery`](https://github.com/Cork-Technology/cork-periphery/tree/v0.1.1) README |
+| 8 | **Whitelist the adapter's selectors in your Guarded Executor** — and only those. The adapter exists because your whitelist constrains contract + function, not arguments. Wire the approvals for your route (adapter route: CA/REF/cST to the adapter, nothing to the LOP or pool manager). | `cork-periphery` README ("The problem these solve", allowance matrix); quickstart §6.3 |
+| 9 | **Run one full cover cycle at pilot size** — buy cover, hold, exercise or let expire, reconcile via `ch track` and the venue API. Simulate every artifact before signing. | Quickstart §3, §6; [API docs](https://api-phoenix.cork.tech/docs) |
+| 10 | **Close the loop with Cork** — the checklist at the bottom of this document, both directions. | Below |
 
 ## The trust boundary — you own your adapter
 
@@ -95,14 +98,23 @@ line, announced in advance.
   Retired deployments still answer calls and decode into plausible nonsense.
 - **Do not whitelist raw `CorkPoolManager` or the raw 1inch LOP** in your
   executor. Whitelist your deployed adapter's selectors instead.
-- **Do not approve cST to the pool manager.** The exercise path pulls through
-  the adapter; a standing pool-manager approval is a standing risk.
+- **Do not approve cST (or cPT) to the pool manager.** Such an approval can
+  never legitimately be spent — the pool manager's internal transfer path skips
+  the allowance check when the token's owner is the caller — so it only sits
+  there as standing risk. On the adapter route, every approval goes to your
+  adapter; the exact needs per action are machine-readable in the prepared
+  artifact (`data.forSelf.allowances`).
 - **Do not infer the chain from an address.** Cross-chain address identity is a
   CREATE2 property, not a chain signal; select the chain explicitly.
-- **Do not trust any document over the manifest** on versions or addresses.
-  Known instance today: the quickstart's status block still names
-  market-registry `0.3.2`; the Distribution pins `0.3.3`. The quickstart's own
-  rule covers you — pull authoritative values from the tool, never the prose.
+- **Do not trust any document over the manifest** on versions or addresses —
+  and **never copy an address out of a doc's example output**. Known instance
+  today: the pinned quickstart was written against market-registry `0.3.2`; the
+  Distribution pins `0.3.3`, which redeployed the registry, the adapter and all
+  three recipe contracts at new addresses. The quickstart's worked examples
+  therefore show retired addresses, and its "Base is pre-first-market /
+  `roles_not_granted`" framing is resolved. The tool itself is current (its
+  defaults carry 0.3.3 and self-update), and the quickstart's own rule covers
+  you: pull authoritative values from `ch query`, never from prose.
 - **Do not use anything from this repository's git history.** The pre-August
   material targets deleted entrypoints and dead deployments.
 
