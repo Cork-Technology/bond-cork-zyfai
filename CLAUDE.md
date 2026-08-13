@@ -1,49 +1,45 @@
-# CLAUDE.md
+# CLAUDE.md — agent context for this repository
 
-## What this repo is
+## What this repository is
 
-A monorepo for the `bond.credit × Cork × Zyfai` hackathon pilot (Arbitrum Open House
-London). Two autonomous agents — a trading agent and an underwriting agent — discover
-the price of a risk slice and settle it on-chain through Cork. Read
-[`PROJECT.md`](./PROJECT.md) first for the goal, team split, and architecture.
+Zyfai's workspace for integrating Cork cover, pinned to Distribution
+**`phoenix/v0.1-rc.1`**. `zyfai/` is Zyfai's own code. `INTEGRATION.md` is the
+runbook — read it before doing any integration work. `README.md` maps the
+pinned reference material.
 
-## Layout
+## Hard rules
 
-One folder per part. The two agents are independent; both integrate Cork.
+1. **The manifest is the authority.**
+   [`distributions/phoenix/v0.1-rc.1.json`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.1-rc.1.json)
+   in `Cork-Technology/distribution` names every version, address, codehash and
+   known issue. Where any document, code comment or memory disagrees with it,
+   the manifest wins. Read living fields (`stage`, `reviewLevel`, `status`,
+   `knownIssues`) fresh from the repo, never from a copy.
+2. **Never write a contract address into this repository** — not in code, not
+   in docs, not in comments. Read addresses live (`ch query protocol-config`
+   via the cork-cli MCP) or from the manifest at the moment of use. If you find
+   a hardcoded address here, that is a bug: remove it and cite the live source
+   instead.
+3. **Never resurrect anything from git history.** Pre-August history holds the
+   hackathon package: deleted entrypoints (`CorkMarketCreator.createMarket`),
+   retired adapter generations, dead addresses, and a stale `cork-operations`
+   skill. None of it is a valid reference for any question about Cork.
+4. **Signing stays in Zyfai's stack.** The cork-cli tooling reads state, does
+   deterministic math, and builds *unsigned* artifacts; only `cork_submit`
+   relays a signed payload, and nothing in it ever holds a key. Do not build or
+   propose flows where the tooling signs or custodies funds.
+5. **Do not edit `zyfai/` unless the task explicitly asks for it.** It is
+   Zyfai's production-path code, not shared scaffolding.
 
-```
-zyfai/    Trading (demand) agent — buys cST coverage. TypeScript / Node / Express:
-          an ERC-4337 Safe smart wallet on Arbitrum One, Pimlico-sponsored, with a
-          generic tx API (GET /wallet, POST /tx, GET /health). See zyfai/README.md.
+## Operating Cork
 
-bond/     Underwriting (supply) agent — prices/underwrites the risk, holds cPT.
-          Placeholder, to be built by Bond. See bond/README.md.
+Use the [`cork-integration`](./.claude/skills/cork-integration/SKILL.md) skill.
+It wires the cork-cli MCP server (pinned tag `v0.1.0-rc.3`) and carries the
+decision rules. The tool surface is self-documenting: start any unfamiliar task
+with `cork_capabilities`, not with a guess.
 
-cork/     Cork integration both agents build on — Solidity / Foundry. Its own
-          Foundry root, README, and CLAUDE.md (cork/CLAUDE.md carries the full
-          contract-level knowledge graph). Build with `forge` from inside cork/.
+## Chains
 
-.claude/skills/cork-operations/   Shared, root-level agent playbook for operating
-          Cork. Auto-discovered as the cork-operations skill.
-```
-
-Each part has its own toolchain and they never share a build. Node tooling governs
-`zyfai/`; Foundry (`foundry.toml`, `remappings.txt`, `lib/` submodules) governs
-`cork/`.
-
-## Working in `cork/`
-
-- `cd cork && forge build && forge test` — needs submodules: after clone run
-  `git submodule update --init --recursive` (pulls `forge-std` and the public
-  `phoenix` protocol repo, which has its own nested dependencies).
-- `cork/CLAUDE.md` carries the full contract-level knowledge graph.
-
-## Operating Cork autonomously
-
-Both agents operate Cork through the root-level skill
-[`.claude/skills/cork-operations/`](./.claude/skills/cork-operations/) — discoverable
-as the `cork-operations` skill. It carries the decision rules to create markets, run
-pool actions, and trade cST coverage through the ceremony (just-in-time orders on
-1inch LOP v4). Its `references/` hold the live Arbitrum One address book and the Cork
-Phoenix API guide, and it points at the runnable off-chain examples under
-`cork/docs/examples/`.
+Deployed on Arbitrum One (42161) and Base (8453) at identical addresses.
+**Base first** — it is the proven partner path. Never infer the chain from an
+address; select it explicitly.
