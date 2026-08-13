@@ -16,7 +16,8 @@
     "format": "prettier --write \"src/**/*.ts\" \"*.md\"",
     "provision:account": "tsx src/scripts/provision-account.ts",
     "cover": "tsx src/scripts/cover.ts",
-    "buy:cover": "tsx src/scripts/buy-cover.ts"
+    "buy:cover": "tsx src/scripts/buy-cover.ts",
+    "discover:cork": "tsx src/scripts/discover-cork.ts"
   },
   "dependencies": {
     "@rhinestone/sdk": "^2.2.1",

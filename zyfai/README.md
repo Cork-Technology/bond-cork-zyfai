@@ -195,3 +195,70 @@ src/
 - [viem](https://viem.sh) + [permissionless.js](https://docs.pimlico.io/permissionless) (Safe 4337 account)
 - [Pimlico](https://www.pimlico.io) bundler + paymaster
 - zod (validation), pino (logging)
+
+---
+
+## Cork cover operations (Base)
+
+Zyfai buys cST cover through its own `CorkForSelfAdapter` — a receiver-forcing wrapper
+deployed under Zyfai's name. Raw `CorkPoolManager` and raw 1inch LOP are **never** whitelisted
+in the TargetRegistry; the adapter is the only spender the Safe ever approves.
+
+### Deployed adapter (Base, chainId 8453)
+
+Source of truth for every whitelist entry: [`src/generated/cork-selectors.json`](src/generated/cork-selectors.json).
+The JSON is auto-extracted from the adapter ABI post-deploy — never hand-edit selector values.
+
+- Address: `0x4C0458cB8dcd2B9c7BDA45E4d59a3060dce59E5E`
+- CREATE2 salt: `keccak256("zyfai:CorkForSelfAdapter:v1")` — same address available on Arbitrum One if redeployed with identical params
+- Verified: [Basescan](https://basescan.org/address/0x4c0458cb8dcd2b9c7bda45e4d59a3060dce59e5e#code)
+- Source: [`Cork-Technology/cork-periphery@v0.1.1`](https://github.com/Cork-Technology/cork-periphery/tree/v0.1.1)
+
+### TargetRegistry entries required to BUY cover
+
+Two entries — no more:
+
+| # | target | selector | function | notes |
+|---|---|---|---|---|
+| 1 | `0x4C0458cB8dcd2B9c7BDA45E4d59a3060dce59E5E` (adapter) | `0xa9aa7877` | `fillOrderForSelf` | route the 1inch fill through the adapter |
+| 2 | `<CA-token-address>` (e.g. sUSDe on the pilot pair) | `0x095ea7b3` | `approve(spender=<adapter>, amount)` | let the adapter pull the CA premium |
+
+If the TargetRegistry constrains `approve` spender: pin `spender = 0x4C04…9E5E` explicitly.
+
+To add these, call `TargetRegistry.whitelist(target, selector)` from the Safe's owner EOA
+(this is an **owner** operation, not a session-key op — the session key cannot whitelist itself).
+
+### Exercise entries (add before the first exercise, not needed for buy)
+
+Documented in [`cork-selectors.json`](src/generated/cork-selectors.json) under
+`targetRegistryWhitelist.exercise`: `exerciseForSelf` (`0x1ec95fe9`), `exerciseOtherForSelf`
+(`0xb29152a5`), `(REF, approve→adapter)`, `(cST, approve→adapter)`. **Never** approve cST to
+the raw pool manager — the transfer path bypasses the allowance and the approval sits as
+standing risk.
+
+Note: cST/cPT are per-market; every new pool mints new share tokens. One approve-spender
+allowlist entry per market you cover.
+
+### Buy flow (once whitelisted + funded)
+
+```bash
+# 1. Fund the Safe with the CA premium (~5-20 CA base units for the pilot)
+# 2. Dry-run: prepare + simulate but do not broadcast
+npm run buy:cover -- --pool-id 0x… --amount <cST-base-units> --dry-run
+# 3. Live: broadcast through GUARD_MODULE.executeGuardedBatch
+npm run buy:cover -- --pool-id 0x… --amount <cST-base-units>
+```
+
+The script walks: `orderbook → decode order → prepare(--for-self) → simulate (require
+wouldRevert:false) → sendGuardedBatch → reconcile`. Bit-invalidator and decaying-auction are
+warned in-line. See [`src/scripts/buy-cover.ts`](src/scripts/buy-cover.ts).
+
+### Discovery — what's registered on Cork today
+
+```bash
+npm run discover:cork              # Base by default
+npm run discover:cork -- --chain-id 42161   # Arbitrum
+```
+
+Prints live protocol deployment (`ch query protocol-config`), registered assets, and
+approved recipes. Never hardcodes an address — everything read live.

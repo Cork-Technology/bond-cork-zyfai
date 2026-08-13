@@ -1,0 +1,128 @@
+{
+  "$comment": "Auto-extracted from CorkForSelfAdapter ABI via `forge inspect ... methodIdentifiers`. Source of truth for TargetRegistry whitelist entries. Do not edit by hand — regenerate if the adapter is redeployed.",
+  "generatedAt": "2026-08-13",
+  "adapter": {
+    "chainId": 8453,
+    "network": "base",
+    "address": "0x4C0458cB8dcd2B9c7BDA45E4d59a3060dce59E5E",
+    "salt": "0x5433a9ab15c4736634d9da4cfa8fc73ac1443e41d886335ec24f9faf0d253967",
+    "saltPreimage": "keccak256(\"zyfai:CorkForSelfAdapter:v1\")",
+    "deployer": "0x1c744bDD458672F45d66705f5F71b527ec52502B",
+    "source": "github.com/Cork-Technology/cork-periphery@v0.1.1",
+    "immutables": {
+      "CORK": "0x02803Bb52D2184f906F45B50C66AA969C2E37263",
+      "WHITELIST": "0xEEd30E98abDC4da6d9Ac15c1184C9d046cA0Ccd6",
+      "LOP": "0x111111125421cA6dc452d289314280a0f8842A65"
+    },
+    "basescan": "https://basescan.org/address/0x4c0458cb8dcd2b9c7bda45e4d59a3060dce59e5e#code"
+  },
+  "selectors": {
+    "fillOrderForSelf": {
+      "selector": "0xa9aa7877",
+      "signature": "fillOrderForSelf((bytes32,(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),bytes,uint256,uint256,bytes,uint256))",
+      "purpose": "Buy cST via 1inch LOP fill — the ONE selector to whitelist for a first buy"
+    },
+    "exerciseForSelf": {
+      "selector": "0x1ec95fe9",
+      "signature": "exerciseForSelf((bytes32,uint256,uint256,uint256,uint256))",
+      "purpose": "Exercise cST: hand in cST + REF, receive CA"
+    },
+    "exerciseOtherForSelf": {
+      "selector": "0xb29152a5",
+      "signature": "exerciseOtherForSelf((bytes32,uint256,uint256,uint256,uint256))",
+      "purpose": "Exercise cST against a different reference asset variant"
+    },
+    "depositForSelf": {
+      "selector": "0x378c9ac6",
+      "signature": "depositForSelf((bytes32,uint256,uint256,uint256))"
+    },
+    "mintForSelf": {
+      "selector": "0x74b8faca",
+      "signature": "mintForSelf((bytes32,uint256,uint256,uint256))"
+    },
+    "swapForSelf": {
+      "selector": "0x6b5a0f3a",
+      "signature": "swapForSelf((bytes32,uint256,uint256,uint256,uint256))"
+    },
+    "redeemForSelf": {
+      "selector": "0xcda93c02",
+      "signature": "redeemForSelf((bytes32,uint256,uint256,uint256,uint256))"
+    },
+    "withdrawForSelf": {
+      "selector": "0x38fe92e0",
+      "signature": "withdrawForSelf((bytes32,uint256,uint256,uint256))"
+    },
+    "withdrawOtherForSelf": {
+      "selector": "0x5fd35a1a",
+      "signature": "withdrawOtherForSelf((bytes32,uint256,uint256,uint256))"
+    },
+    "unwindDepositForSelf": {
+      "selector": "0x0ec961b8",
+      "signature": "unwindDepositForSelf((bytes32,uint256,uint256,uint256))"
+    },
+    "unwindMintForSelf": {
+      "selector": "0x409f699d",
+      "signature": "unwindMintForSelf((bytes32,uint256,uint256,uint256))"
+    },
+    "unwindSwapForSelf": {
+      "selector": "0xb5b8aa76",
+      "signature": "unwindSwapForSelf((bytes32,uint256,uint256,uint256,uint256))"
+    },
+    "unwindExerciseForSelf": {
+      "selector": "0x894b2bc7",
+      "signature": "unwindExerciseForSelf((bytes32,uint256,uint256,uint256,uint256))"
+    },
+    "unwindExerciseOtherForSelf": {
+      "selector": "0x1dc3f3db",
+      "signature": "unwindExerciseOtherForSelf((bytes32,uint256,uint256,uint256,uint256))"
+    }
+  },
+  "erc20": {
+    "approve": {
+      "selector": "0x095ea7b3",
+      "signature": "approve(address,uint256)"
+    }
+  },
+  "targetRegistryWhitelist": {
+    "$comment": "Minimum entries to whitelist on Zyfai's TargetRegistry. Approve rows: constrain the spender to the adapter (never the LOP or the pool manager).",
+    "buy": [
+      {
+        "target": "0x4C0458cB8dcd2B9c7BDA45E4d59a3060dce59E5E",
+        "selector": "0xa9aa7877",
+        "function": "fillOrderForSelf"
+      },
+      {
+        "target": "<CA-token-address>",
+        "selector": "0x095ea7b3",
+        "function": "approve",
+        "spender": "0x4C0458cB8dcd2B9c7BDA45E4d59a3060dce59E5E",
+        "note": "CA = the premium asset (e.g. sUSDe 0x211Cc4DD…5fE5d2 on the sUSDe/mwUSDC pilot)"
+      }
+    ],
+    "exercise": [
+      {
+        "target": "0x4C0458cB8dcd2B9c7BDA45E4d59a3060dce59E5E",
+        "selector": "0x1ec95fe9",
+        "function": "exerciseForSelf"
+      },
+      {
+        "target": "0x4C0458cB8dcd2B9c7BDA45E4d59a3060dce59E5E",
+        "selector": "0xb29152a5",
+        "function": "exerciseOtherForSelf"
+      },
+      {
+        "target": "<REF-token-address>",
+        "selector": "0x095ea7b3",
+        "function": "approve",
+        "spender": "0x4C0458cB8dcd2B9c7BDA45E4d59a3060dce59E5E"
+      },
+      {
+        "target": "<cST-token-address-per-market>",
+        "selector": "0x095ea7b3",
+        "function": "approve",
+        "spender": "0x4C0458cB8dcd2B9c7BDA45E4d59a3060dce59E5E",
+        "note": "cST is per-market — one entry per new pool. NEVER approve cST to the pool manager (raw); adapter-only."
+      }
+    ]
+  }
+}

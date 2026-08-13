@@ -2,6 +2,7 @@
 .DS_Store
 .vscode/
 .idea/
+.cursor/mcp.json
 
 # Dependencies / build output (per-agent tooling; belt-and-suspenders)
 **/node_modules/

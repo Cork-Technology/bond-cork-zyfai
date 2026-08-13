@@ -1,5 +1,30 @@
-import 'dotenv/config';
+import { config as dotenv } from 'dotenv';
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+
+// Load .env from the zyfai/ project root, no matter where the script was launched from.
+// Walk upward from this file until we find a package.json — that is the zyfai root.
+function findEnvPath(): string | undefined {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  const root = resolve('/');
+  while (dir !== root) {
+    if (existsSync(join(dir, 'package.json'))) {
+      const envPath = join(dir, '.env');
+      return existsSync(envPath) ? envPath : undefined;
+    }
+    dir = dirname(dir);
+  }
+  return undefined;
+}
+
+const envPath = findEnvPath();
+if (envPath) {
+  dotenv({ path: envPath });
+} else {
+  dotenv();
+}
 
 const hexPrivateKey = z
   .string()
@@ -31,16 +56,29 @@ const envSchema = z.object({
   DUMMY_APPROVE_TOKEN: hexAddress.optional(),
   DUMMY_APPROVE_SPENDER: hexAddress.optional(),
 
-  // Cork cover loop (src/scripts/cover.ts). Cork Phoenix is live on Ethereum (1) and Arbitrum One
-  // (42161) only — `cork_query protocol-config` returns `unknown_deployment` for any other chain.
-  CORK_CHAIN_ID: z.coerce.number().int().positive().default(42161),
+  // Cork cover loop. Base first (8453) — phoenix v1.3 is deployed at identical addresses on
+  // Base and Arbitrum One. Read live protocol addresses via `ch query protocol-config`; the
+  // only address pinned here is the integrator-owned CORK_FOR_SELF_ADAPTER (Zyfai's own
+  // deployment, immutable receiver-forcing wrapper).
+  CORK_CHAIN_ID: z.coerce.number().int().positive().default(8453),
   CORK_RPC_URL: z.string().url('CORK_RPC_URL must be a valid URL').optional(),
+  // Optional Envio token for full-decentralized reads + post-broadcast reconcile via
+  // `ch track reconcile`. Runtime works without; reconcile is more reliable with it.
+  ENVIO_API_TOKEN: z.string().min(1).optional(),
+  // Zyfai's own CorkForSelfAdapter — receiver-forcing wrapper deployed under Zyfai's name.
+  // Whitelist THIS address (not the raw Cork PoolManager / LOP) in the TargetRegistry.
+  CORK_FOR_SELF_ADAPTER: hexAddress.optional(),
+
+  // Legacy — only used by the raw-Bundler3 `cover.ts` script (pre-adapter path).
+  // buy-cover.ts routes through CORK_FOR_SELF_ADAPTER and does not need these.
+  // Once cover.ts is deleted, remove these too.
   CORK_LOP: hexAddress.default('0x111111125421cA6dc452d289314280a0f8842A65'),
   CORK_POOL_MANAGER: hexAddress.optional(),
   CORK_ADAPTER: hexAddress.optional(),
   CORK_BUNDLER3: hexAddress.optional(),
+
   // The pair being covered: REF is the asset the user is exposed to (e.g. an ERC-4626 vault share),
-  // CA is what the Safe receives on exercise.
+  // CA is what the Safe pays the premium in and receives on exercise.
   COVER_REF: hexAddress.optional(),
   COVER_CA: hexAddress.optional(),
   COVER_CST: hexAddress.optional(),
