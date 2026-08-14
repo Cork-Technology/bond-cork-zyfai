@@ -5,28 +5,23 @@
 > EIP-712 / ERC-1271 signing, ERC-2612 permits, ERC-4626 vaults.
 > **Chain:** Base (8453) first; everything transfers to Arbitrum One (42161) by
 > changing the chain id and asset addresses.
-> **Pin:** Distribution [`phoenix/v0.1-rc.1`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.1-rc.1.json).
-> **Status:** written 2026-08-11 against that pin. If the pin has moved, this
-> document is orientation, not instruction — re-read the manifest first.
+> **Pin:** Distribution [`phoenix/v0.2-rc.1`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.2-rc.1.json).
+> **Status:** updated 2026-08-14 against that pin (first written 2026-08-11
+> against `v0.1-rc.1`; what moved between the two is in the README's "Moving
+> from v0.1-rc.1"). If the pin has moved again, this document is orientation,
+> not instruction — re-read the manifest first.
 
 This document sequences the integration. It does not duplicate the reference
 material: each step links the pinned document that carries the detail. The full
 teaching walkthrough — Cork's model, the glossary, every command in runnable
 form — is the
-[Zyfai quickstart](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/docs/zyfai-quickstart.md);
+[Zyfai quickstart](https://github.com/Cork-Technology/cork-cli/blob/v0.2.0-rc.2/docs/zyfai-quickstart.md);
 this runbook is the spine that tells you what to do, in what order, and who owns
-what.
-
-> **Known drift in that quickstart** (tracked as
-> [cork-cli#1](https://github.com/Cork-Technology/cork-cli/issues/1), warning
-> removed here once a refreshed tag lands): its status block and example
-> outputs were captured against market-registry `0.3.2`; this Distribution pins
-> `0.3.3`, which redeployed the registry, adapter and all three recipe
-> contracts at new addresses, and its "Base is pre-first-market /
-> `roles_not_granted`" framing is resolved. The *flow* it teaches is correct
-> and the tool's defaults are current — but treat every address printed in it
-> as retired and pull the real ones live (`ch query`). Full detail in the
-> "Do not" list below.
+what. The drift warning that used to sit here is gone for a good reason: the
+`v0.2.0-rc.2` quickstart's live outputs were re-captured 2026-08-12 against the
+pinned `0.3.3` contracts, and cork-cli now gates its own releases on that
+freshness. The standing rule is unchanged either way: pull authoritative values
+from `ch query`, never from prose.
 
 ## What you are integrating, in one paragraph
 
@@ -47,13 +42,13 @@ Work the steps in order. Each is small; nothing here should take a day.
 
 | # | Step | Where the detail lives |
 |---|---|---|
-| 1 | **Read the manifest** for `phoenix/v0.1-rc.1`: components, chains, review level, known issues, external dependencies (1inch LOP v4, Bundler3, the CREATE2 factory). | [The manifest](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.1-rc.1.json) |
-| 2 | **Install `cork-cli` at the pinned tag** (`v0.1.0-rc.3`) and add its MCP server to your agent. | Quickstart §4 (the integration kit) |
-| 3 | **Self-test the install.** A healthy install answers exactly **9 tools**; 8 are read-only, only `cork_submit` writes. Expected-failure reason codes (`chain_read_failed`, `unavailable`, …) are documented answers, not broken installs. | [cork-cli README](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/README.md) |
-| 4 | **Read live state on Base** — `ch query protocol-config`, registered assets, recipes. This is where addresses come from, every time. | Quickstart §3; [`ch` reference](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/docs/cli.md) |
+| 1 | **Read the manifest** for `phoenix/v0.2-rc.1`: components, chains, review level, known issues, external dependencies (1inch LOP v4, Bundler3, the CREATE2 factory). | [The manifest](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.2-rc.1.json) |
+| 2 | **Install `cork-cli` at the pinned tag** (`v0.2.0-rc.2`) and add its MCP server to your agent. | Quickstart §4 (the integration kit) |
+| 3 | **Self-test the install.** A healthy install answers exactly **9 tools**; 8 are read-only, only `cork_submit` writes. Expected-failure reason codes (`chain_read_failed`, `unavailable`, …) are documented answers, not broken installs. | [cork-cli README](https://github.com/Cork-Technology/cork-cli/blob/v0.2.0-rc.2/README.md) |
+| 4 | **Read live state on Base** — `ch query protocol-config`, registered assets, recipes. This is where addresses come from, every time. | Quickstart §3; [`ch` reference](https://github.com/Cork-Technology/cork-cli/blob/v0.2.0-rc.2/docs/cli.md) |
 | 5 | **Walk the cover flow end to end** on Base: derive the market, open the RFQ, verify and simulate the underwriter's order, then sign and broadcast the fill **from your own stack** — the tooling builds unsigned artifacts and relays venue postings; it never signs, never broadcasts a fill, never holds funds. An unanswered RFQ means no underwriter is quoting that pair yet — coordination, not an error; raise it. Confirm the RFQ package catalog and notional units with Cork before the first post. | Quickstart §2–§3 |
 | 6 | **Read quickstart §5 (Risks & ownership) in full** before touching the whitelist. Items A–C are the security core: the receiver argument your whitelist can't see, the pool whitelist being off by construction, and which spender each approval goes to. D–G (no slippage guard on exercise, REF pauses freezing cover, reconcile discipline, address drift) shape your monitoring. | Quickstart §5 |
-| 7 | **Deploy your own receiver-forcing adapter** from `cork-periphery v0.1.1` (`CorkForSelfAdapter` is the one to deploy: one address to audit, whitelist and approve). Audit and vet it first — see the trust boundary below. | [`cork-periphery`](https://github.com/Cork-Technology/cork-periphery/tree/v0.1.1) README |
+| 7 | **Deploy your own receiver-forcing adapter** from `cork-periphery v0.1.3-rc.1` (`CorkForSelfAdapter` is the one to deploy: one address to audit, whitelist and approve; its source is unchanged since `v0.1.1`, so an adapter already deployed from that tag stays valid). Audit and vet it first — see the trust boundary below. | [`cork-periphery`](https://github.com/Cork-Technology/cork-periphery/tree/v0.1.3-rc.1) README |
 | 8 | **Whitelist the adapter's selectors in your Guarded Executor** — and only those. The adapter exists because your whitelist constrains contract + function, not arguments. Wire the approvals for your route (adapter route: CA/REF/cST to the adapter, nothing to the LOP or pool manager). | `cork-periphery` README ("The problem these solve", allowance matrix); quickstart §6.3 |
 | 9 | **Run one full cover cycle at pilot size** — buy cover, hold, exercise or let expire, reconcile via `ch track` and the venue API. Simulate every artifact before signing. | Quickstart §3, §6; [API docs](https://api-phoenix.cork.tech/docs) |
 | 10 | **Close the loop with Cork** — the checklist at the bottom of this document, both directions. | Below |
@@ -87,9 +82,11 @@ Stated in the manifest; repeated here so nobody discovers it late:
 
 - **`partner-preview`, review level `unreviewed`, no audits.** Best-effort
   support, no production commitment. The cross-component integration suite was
-  waived for this first cut (recorded in the manifest, with owner and date);
-  the nearest evidence is cork-cli fork-proven end to end against the pinned
-  stack.
+  waived for this cut — for the second and final time, per the manifest; the
+  next cut requires a real cross-component run. The nearest evidence is
+  stronger than a fork now: the live loop has been filling on Base against
+  exactly this pinned contract set since 2026-08-10, and the ForSelf
+  integration flow is fork-proven end to end against the pinned adapters.
 - **Rollover is not part of this Distribution.** Cover a position, exercise or
   expire — renewal into a successor market is not shipped. Do not design
   around it existing.
@@ -118,12 +115,10 @@ line, announced in advance.
 - **Do not infer the chain from an address.** Cross-chain address identity is a
   CREATE2 property, not a chain signal; select the chain explicitly.
 - **Do not trust any document over the manifest** on versions or addresses —
-  and **never copy an address out of a doc's example output**. Known instance
-  today: the pinned quickstart's `0.3.2` drift called out at the top of this
-  document ([cork-cli#1](https://github.com/Cork-Technology/cork-cli/issues/1)).
-  The tool itself is current (its defaults carry 0.3.3 and self-update), and
-  the quickstart's own rule covers you: pull authoritative values from
-  `ch query`, never from prose.
+  and **never copy an address out of a doc's example output**, however fresh
+  the capture. The pinned quickstart's outputs are current today; the rule
+  exists so that stops mattering: pull authoritative values from `ch query`,
+  never from prose.
 - **Do not use anything from this repository's git history.** The pre-August
   material targets deleted entrypoints and dead deployments.
 
@@ -131,8 +126,8 @@ line, announced in advance.
 
 What Zyfai does:
 
-1. Read the manifest; confirm the pin (`phoenix/v0.1-rc.1`) in your own notes.
-2. Install `cork-cli@v0.1.0-rc.3`, add the MCP server, pass the 9-tool self-test.
+1. Read the manifest; confirm the pin (`phoenix/v0.2-rc.1`) in your own notes.
+2. Install `cork-cli@v0.2.0-rc.2`, add the MCP server, pass the 9-tool self-test.
 3. Run the read/derive/prepare flow on Base against live state.
 4. Audit and deploy your `CorkForSelfAdapter`; whitelist its selectors only.
 5. Run one full cover cycle at pilot size and reconcile it.
