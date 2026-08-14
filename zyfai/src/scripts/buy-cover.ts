@@ -16,6 +16,7 @@
  * Runtime path is fully typed through `services/cork-cli.ts`; this script is the
  * orchestration layer. Errors bubble as typed CorkError subclasses.
  */
+import { encodeFunctionData, erc20Abi } from 'viem';
 import type { Address, Hex } from 'viem';
 
 import { env } from '../config/env.js';
@@ -28,9 +29,8 @@ import {
   CorkError,
   CorkConflictError,
   CorkUnavailableError,
-  type ForSelfArtifact,
+  type Allowance,
   type Order,
-  type TxCall,
 } from '../services/cork-cli.js';
 import { createSessionContext, type Execution } from '../services/session.js';
 
@@ -105,16 +105,37 @@ function pickSellOrder(orders: readonly Order[], amount: bigint): Order {
   );
 }
 
-function toExecution(tx: TxCall): Execution {
-  return {
-    target: tx.to,
-    value: asBigInt(tx.value),
-    callData: tx.data,
-  };
-}
-
 function sameAddress(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
+}
+
+/**
+ * A forSelf artifact is ONE unsigned adapter call; the approvals it needs are
+ * described in `forSelf.allowances` (spender: structurally the adapter), not
+ * included as transaction legs. Size each approval from the order we picked;
+ * refuse any allowance this script cannot size.
+ */
+function approveExecution(
+  alw: Allowance,
+  adapter: Address,
+  order: Order,
+  takingCap: bigint,
+): Execution {
+  if (!sameAddress(alw.token, order.takerAsset)) {
+    fail(
+      `cannot size allowance for ${alw.tokenRole} (${alw.token}, field ${alw.amountField}) — ` +
+        'only the taker-asset (CA premium) allowance is expected on a fill; inspect the artifact',
+    );
+  }
+  return {
+    target: alw.token,
+    value: 0n,
+    callData: encodeFunctionData({
+      abi: erc20Abi,
+      functionName: 'approve',
+      args: [adapter, takingCap],
+    }),
+  };
 }
 
 async function main(): Promise<void> {
@@ -175,36 +196,43 @@ async function main(): Promise<void> {
     clientRequestId: `buy-${Date.now()}`,
   });
 
-  console.log(`txs     : ${artifact.transactions.length}`);
-  for (const alw of artifact.forSelf.allowances) {
-    console.log(`  approve ${alw.token} → ${alw.spender} : ${alw.amount}`);
-    if (!sameAddress(alw.spender, adapter)) {
-      fail(`allowance spender ${alw.spender} != our adapter ${adapter} — REFUSE (safety)`);
-    }
+  // Safety: the artifact's adapter (the only spender its allowances can feed,
+  // and the target of the call) must be OUR deployment.
+  if (!sameAddress(artifact.forSelf.adapter, adapter) || !sameAddress(artifact.to, adapter)) {
+    fail(
+      `artifact adapter ${artifact.forSelf.adapter} / target ${artifact.to} != our adapter ${adapter} — REFUSE (safety)`,
+    );
   }
 
-  if (artifact.scales) {
-    console.log(
-      `scales  : CA=${artifact.scales.collateralDecimals}dec, REF=${artifact.scales.referenceDecimals}dec`,
-    );
+  // The taker-asset cap the CLI signs the fill against: the exact rounded-up
+  // signed ratio (takingAmount * fill / makingAmount, ceiling division).
+  const makingFull = asBigInt(order.makingAmount, asBigInt(order.remainingMakingAmount));
+  const takingFull = asBigInt(order.takingAmount, asBigInt(order.remainingTakingAmount));
+  if (makingFull === 0n) fail('order has no makingAmount — cannot size the premium cap');
+  const takingCap = (takingFull * amountBn + makingFull - 1n) / makingFull;
+  console.log(`premium : cap ${takingCap.toString()} base units of ${order.takerAsset} (CA)`);
+
+  for (const alw of artifact.forSelf.allowances) {
+    console.log(`  approve ${alw.token} → ${artifact.forSelf.adapter} (${alw.kind}, ${alw.amountField})`);
   }
 
   if (artifact.auction) {
-    console.warn(
-      `  ! DECAYING AUCTION detected — price falls toward floor. ` +
-        `Re-simulate <10s before broadcast to keep the cap valid. ` +
-        `(current=${artifact.auction.current}, ceiling=${artifact.auction.ceiling}, floor=${artifact.auction.floor})`,
+    // A decaying auction prices the fill ABOVE the signed ratio until decay
+    // completes, so the signed-ratio cap computed here would under-approve and
+    // the fill would revert. Size the approval from the auction ceiling before
+    // wiring this path.
+    fail(
+      `DECAYING AUCTION order — this script sizes the premium approval from the signed ratio, ` +
+        `which is below the live auction price ` +
+        `(current=${artifact.auction.current}, ceiling=${artifact.auction.ceiling}, floor=${artifact.auction.floor}). ` +
+        'Pick a non-auction order, or extend approveExecution to cap at the auction ceiling.',
     );
-  }
-
-  for (const w of artifact.warnings ?? []) {
-    console.warn(`  ! artifact warning [${w.code}] ${w.message}`);
   }
 
   // Step 4 — pre-flight simulate; REQUIRE wouldRevert:false
   const sim = await trackSimulate(env.CORK_CHAIN_ID, artifact);
   if (sim.wouldRevert) {
-    fail(`simulate reports wouldRevert: ${sim.reason ?? '(no reason)'}`);
+    fail(`simulate reports wouldRevert: ${sim.revertReason ?? '(no reason)'}`);
   }
   console.log('sim     : ok, wouldRevert=false');
 
@@ -213,8 +241,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Step 5 — sign + broadcast via Rhinestone intent through the GUARD_MODULE
-  const executions = artifact.transactions.map(toExecution);
+  // Step 5 — sign + broadcast via Rhinestone intent through the GUARD_MODULE:
+  // the approvals the artifact asks for, then the single adapter call.
+  const executions: Execution[] = [
+    ...artifact.forSelf.allowances.map((alw) => approveExecution(alw, adapter, order, takingCap)),
+    { target: artifact.to, value: asBigInt(artifact.value), callData: artifact.calldata },
+  ];
   console.log(`\nbroadcasting ${executions.length} exec(s) through GUARD_MODULE.executeGuardedBatch…`);
   const result = await ctx.sendGuardedBatch(executions);
   console.log(`tx      : ${result.transactionHash}`);
