@@ -1,7 +1,7 @@
 /**
  * One-shot demand-side cST buy through Zyfai's CorkForSelfAdapter.
  *
- *   orderbook → decode → prepare(--for-self) → simulate → sendGuardedBatch → reconcile
+ *   orderbook → decode → prepare(--for-self) → batch pre-flight → sendGuardedBatch → reconcile
  *
  * Usage:
  *   npm run buy:cover -- --pool-id 0x… --amount <cST-base-units> [--dry-run]
@@ -32,7 +32,7 @@ import {
   type Allowance,
   type Order,
 } from '../services/cork-cli.js';
-import { createSessionContext, type Execution } from '../services/session.js';
+import { createSessionContext, GUARDED_BATCH_SIM_ABI, type Execution } from '../services/session.js';
 
 function fail(message: string): never {
   console.error(`\nFAILED: ${message}`);
@@ -154,7 +154,7 @@ async function main(): Promise<void> {
   console.log(`adapter : ${adapter}`);
   console.log(`poolId  : ${poolId}`);
   console.log(`amount  : ${amount} cST base units`);
-  if (dryRun) console.log('mode    : --dry-run (stops after trackSimulate)');
+  if (dryRun) console.log('mode    : --dry-run (stops after the batch pre-flight)');
   console.log('');
 
   // Step 1 — find a resting SELL big enough
@@ -209,6 +209,7 @@ async function main(): Promise<void> {
   const makingFull = asBigInt(order.makingAmount, asBigInt(order.remainingMakingAmount));
   const takingFull = asBigInt(order.takingAmount, asBigInt(order.remainingTakingAmount));
   if (makingFull === 0n) fail('order has no makingAmount — cannot size the premium cap');
+  if (takingFull === 0n) fail('order has no takingAmount — cannot size the premium cap');
   const takingCap = (takingFull * amountBn + makingFull - 1n) / makingFull;
   console.log(`premium : cap ${takingCap.toString()} base units of ${order.takerAsset} (CA)`);
 
@@ -229,24 +230,49 @@ async function main(): Promise<void> {
     );
   }
 
-  // Step 4 — pre-flight simulate; REQUIRE wouldRevert:false
+  // Step 4 — the batch: the approvals the artifact asks for, then the single
+  // adapter call.
+  const executions: Execution[] = [
+    ...artifact.forSelf.allowances.map((alw) => approveExecution(alw, adapter, order, takingCap)),
+    { target: artifact.to, value: asBigInt(artifact.value), callData: artifact.calldata },
+  ];
+
+  // Step 5a — advisory: simulate the lone adapter call. It CANNOT pass until
+  // the CA allowance exists, and ours is granted inside the same batch — so a
+  // revert here is expected on a first buy; the batch pre-flight below is the
+  // authoritative gate.
   const sim = await trackSimulate(env.CORK_CHAIN_ID, artifact);
   if (sim.wouldRevert) {
-    fail(`simulate reports wouldRevert: ${sim.revertReason ?? '(no reason)'}`);
+    console.warn(
+      `  ! artifact-only simulate reverts (${sim.revertReason ?? 'no reason'}) — ` +
+        'expected when the premium allowance is granted in-batch; deciding on the batch pre-flight.',
+    );
+  } else {
+    console.log('sim     : ok, wouldRevert=false (allowance already in place)');
   }
-  console.log('sim     : ok, wouldRevert=false');
+
+  // Step 5b — authoritative pre-flight: eth_call the FULL guarded batch
+  // (approvals + fill, atomically) at current state; REQUIRE it not to revert.
+  try {
+    await ctx.publicClient.simulateContract({
+      address: ctx.guardModule,
+      abi: GUARDED_BATCH_SIM_ABI,
+      functionName: 'executeGuardedBatch',
+      args: [executions],
+      account: ctx.safeAddress,
+    });
+    console.log('batch   : pre-flight ok (approvals + fill do not revert)');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    fail(`batch pre-flight reverted — nothing was sent.\n${message}`);
+  }
 
   if (dryRun) {
     console.log('\ndry-run stops here. Remove --dry-run to broadcast.');
     return;
   }
 
-  // Step 5 — sign + broadcast via Rhinestone intent through the GUARD_MODULE:
-  // the approvals the artifact asks for, then the single adapter call.
-  const executions: Execution[] = [
-    ...artifact.forSelf.allowances.map((alw) => approveExecution(alw, adapter, order, takingCap)),
-    { target: artifact.to, value: asBigInt(artifact.value), callData: artifact.calldata },
-  ];
+  // Step 6 — sign + broadcast via Rhinestone intent through the GUARD_MODULE
   console.log(`\nbroadcasting ${executions.length} exec(s) through GUARD_MODULE.executeGuardedBatch…`);
   const result = await ctx.sendGuardedBatch(executions);
   console.log(`tx      : ${result.transactionHash}`);
@@ -254,7 +280,7 @@ async function main(): Promise<void> {
   if (result.blockNumber !== undefined) console.log(`block   : ${result.blockNumber.toString()}`);
   console.log(`success : ${result.success}`);
 
-  // Step 6 — reconcile chain vs venue index
+  // Step 7 — reconcile chain vs venue index
   try {
     await trackReconcile(env.CORK_CHAIN_ID, order.orderHash, result.transactionHash);
     console.log('reconc  : ok');
