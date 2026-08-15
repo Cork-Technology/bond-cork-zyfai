@@ -77,6 +77,12 @@ function unwrap(raw: string): unknown {
   const warnings = envelope.warnings ?? [];
   switch (envelope.state) {
     case 'ok':
+      // ok-state warnings carry venue notices (deprecations with removal dates,
+      // decaying-price notices) — surface them, never swallow them.
+      for (const w of warnings) {
+        const { code, message } = w as { code?: string; message?: string };
+        console.warn(`  ! ch warning [${code ?? '?'}] ${message ?? JSON.stringify(w)}`);
+      }
       return envelope.data ?? parsed;
     case 'unavailable': {
       const first = warnings[0] as { code?: string } | undefined;
@@ -211,28 +217,53 @@ export type DecodedOrder = {
   };
 };
 
-export type Allowance = { token: Address; spender: Address; amount: string };
+/**
+ * An allowance the CALLER must grant before broadcasting. The spender is
+ * structurally `forSelf.adapter` — the artifact never names another spender.
+ * `amountField` names the prepare input whose value is the amount;
+ * `kind: "cap"` means the adapter sweeps back whatever it does not spend.
+ */
+export type Allowance = {
+  tokenRole: string;
+  amountField: string;
+  kind: 'exact' | 'cap';
+  token: Address;
+};
 
-export type TxCall = { to: Address; data: Hex; value?: string };
-
+/**
+ * A prepared forSelf artifact is ONE unsigned transaction (`to`/`calldata`/
+ * `value`), not a bundle: the approvals it needs are described in
+ * `forSelf.allowances` for the caller to build, not included as legs.
+ */
 export type ForSelfArtifact = {
-  transactions: TxCall[];
-  forSelf: { allowances: Allowance[] };
+  kind: string;
+  to: Address;
+  calldata: Hex;
+  value: string;
+  from: Address;
+  /** Unix seconds; the adapter's own deadline check — rebuild if it lapses. */
+  deadline?: string;
+  forSelf: {
+    adapter: Address;
+    functionName: string;
+    selector: Hex;
+    allowances: Allowance[];
+    receiverPolicy?: string;
+  };
   /**
    * Present when the underlying order is a Cork-native decaying-premium auction.
    * Re-simulate close to broadcast: the taker price falls toward `floor`.
    */
   auction?: { current: string; ceiling: string; floor: string };
-  /** Decimal metadata — never assume 18 (USDC = 6). */
-  scales?: { collateralDecimals: number; referenceDecimals: number };
-  warnings?: Array<{ code: string; message: string }>;
+  summary?: string[];
+  simulationRequired?: boolean;
   execution?: unknown;
   [k: string]: unknown;
 };
 
 export type SimulateResult = {
   wouldRevert: boolean;
-  reason?: string;
+  revertReason?: string;
   [k: string]: unknown;
 };
 
@@ -338,8 +369,9 @@ export async function prepareFillForSelf(input: {
 }
 
 /**
- * Build an unsigned `exerciseForSelf` artifact. `receiver` is structurally the
- * calling Safe — the adapter has no receiver parameter.
+ * Build an unsigned `exerciseForSelf` artifact. The adapter has no receiver
+ * parameter on-chain, but the prepare schema still requires `action.receiver`
+ * and asserts it equals `account` on the forSelf path — so we pass it.
  *
  * Pass `rpcUrl` so funding legs resolve (otherwise `fundingLegs: 0` +
  * `funding_needs_rpc` warning).
@@ -367,6 +399,8 @@ export async function prepareExerciseForSelf(input: {
     input.clientRequestId,
     '--pool-id',
     input.poolId,
+    '--receiver',
+    input.account,
     '--cst-shares-in',
     input.cstSharesIn,
     '--min-collateral-assets-out',
@@ -399,20 +433,32 @@ export async function trackSimulate(
 /**
  * Post-broadcast reconciliation between the indexer (venue) and the chain.
  * Chain outranks the indexer on disagreement.
+ *
+ * `ch track reconcile` takes ONE `--subject` per call (`{"kind":"txHash",…}` or
+ * `{"kind":"orderHash",…}`); it has no --order-hash/--tx-hash flags. Two calls:
+ * first the receipt (did OUR tx land), then the order lifecycle (does the venue
+ * index agree with the chain).
  */
 export async function trackReconcile(
   chainId: number,
   orderHash: Hex,
   txHash: Hex,
-): Promise<unknown> {
-  return run([
+): Promise<{ tx: unknown; order: unknown }> {
+  const tx = run([
     'track',
     'reconcile',
     ...CHAIN(chainId),
     '--json',
-    '--order-hash',
-    orderHash,
-    '--tx-hash',
-    txHash,
+    '--subject',
+    JSON.stringify({ kind: 'txHash', txHash }),
   ]);
+  const order = run([
+    'track',
+    'reconcile',
+    ...CHAIN(chainId),
+    '--json',
+    '--subject',
+    JSON.stringify({ kind: 'orderHash', orderHash }),
+  ]);
+  return { tx, order };
 }

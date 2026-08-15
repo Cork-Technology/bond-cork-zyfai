@@ -3,14 +3,14 @@
 ## What this repository is
 
 Zyfai's workspace for integrating Cork cover, pinned to Distribution
-**`phoenix/v0.1-rc.1`**. `zyfai/` is Zyfai's own code. `INTEGRATION.md` is the
+**`phoenix/v0.2-rc.1`**. `zyfai/` is Zyfai's own code. `INTEGRATION.md` is the
 runbook — read it before doing any integration work. `README.md` maps the
 pinned reference material.
 
 ## Hard rules
 
 1. **The manifest is the authority.**
-   [`distributions/phoenix/v0.1-rc.1.json`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.1-rc.1.json)
+   [`distributions/phoenix/v0.2-rc.1.json`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.2-rc.1.json)
    in `Cork-Technology/distribution` names every version, address, codehash and
    known issue. Where any document, code comment or memory disagrees with it,
    the manifest wins. Read living fields (`stage`, `reviewLevel`, `status`,
@@ -34,7 +34,7 @@ pinned reference material.
 ## Operating Cork
 
 Use the [`cork-integration`](./.claude/skills/cork-integration/SKILL.md) skill.
-It wires the cork-cli MCP server (pinned tag `v0.1.0-rc.3`) and carries the
+It wires the cork-cli MCP server (pinned tag `v0.2.0-rc.2`) and carries the
 decision rules. The tool surface is self-documenting: start any unfamiliar task
 with `cork_capabilities`, not with a guess.
 

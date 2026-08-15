@@ -1,9 +1,9 @@
 ---
 name: cork-integration
-description: Operate Cork Distribution phoenix/v0.1-rc.1 through the cork-cli MCP server — read protocol state, derive markets, build and verify unsigned order artifacts, and run the cover flow. Use for any task that touches Cork markets, cST/cPT, quotes, orders, fills, or exercise.
+description: Operate Cork Distribution phoenix/v0.2-rc.1 through the cork-cli MCP server — read protocol state, derive markets, build and verify unsigned order artifacts, and run the cover flow. Use for any task that touches Cork markets, cST/cPT, quotes, orders, fills, or exercise.
 ---
 
-# Operating Cork phoenix/v0.1-rc.1
+# Operating Cork phoenix/v0.2-rc.1
 
 This skill replaces the retired `cork-operations` skill, whose address book
 pointed at deployments that no longer exist. This skill deliberately carries
@@ -12,12 +12,11 @@ reads live state, so the skill's job is wiring, sequencing, and guardrails.
 
 ## Setup
 
-Requires the cork-cli MCP server at the pinned tag **`v0.1.0-rc.3`**. Install
+Requires the cork-cli MCP server at the pinned tag **`v0.2.0-rc.2`**. Install
 and MCP registration:
-[quickstart §"the integration kit"](https://github.com/Cork-Technology/cork-cli/blob/v0.1.0-rc.3/docs/zyfai-quickstart.md).
-Known drift in that quickstart: its example outputs show the superseded `0.3.2`
-contract generation ([cork-cli#1](https://github.com/Cork-Technology/cork-cli/issues/1))
-— never treat an address printed there as current; read addresses live.
+[quickstart §"the integration kit"](https://github.com/Cork-Technology/cork-cli/blob/v0.2.0-rc.2/docs/zyfai-quickstart.md).
+Never treat an address printed in any doc as current, however fresh the
+capture; read addresses live.
 Self-test: a healthy install answers **exactly 9 tools**. If it doesn't, fix
 the install before doing anything else — do not work around a partial surface.
 
@@ -45,7 +44,7 @@ Signing and key custody stay in the caller's stack, always.
    come from `cork_query` at the moment of use. Anything remembered from a doc,
    a prior session, or this repository's history is presumed stale.
 3. **The manifest is the authority on versions.**
-   [`phoenix/v0.1-rc.1`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.1-rc.1.json)
+   [`phoenix/v0.2-rc.1`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.2-rc.1.json)
    pins the set. If a tool, doc, or API self-reports something that contradicts
    it, stop and surface the mismatch instead of picking a side silently.
 4. **Verify before submit.** Run the `cork_track` verification/simulation on a
