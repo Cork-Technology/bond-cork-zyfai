@@ -29,7 +29,7 @@ import {
   CorkError,
   CorkConflictError,
   CorkUnavailableError,
-  type Allowance,
+  type Approval,
   type Order,
 } from '../services/cork-cli.js';
 import { createSessionContext, GUARDED_BATCH_SIM_ABI, type Execution } from '../services/session.js';
@@ -90,13 +90,29 @@ function pickSellOrder(orders: readonly Order[], amount: bigint): Order {
 
   const open = new Set(['OPEN', 'PARTIALLY_FILLED', 'open', 'partially_filled']);
 
-  for (const order of orders) {
+  const fillable = (order: Order): boolean => {
     const side = (order.side ?? 'SELL').toUpperCase();
-    if (side !== 'SELL') continue;
-    if (order.status && !open.has(order.status)) continue;
+    if (side !== 'SELL') return false;
+    if (order.status && !open.has(order.status)) return false;
     const remaining = asBigInt(order.remainingMakingAmount, asBigInt(order.makingAmount));
-    if (remaining < amount) continue;
-    return order;
+    return remaining >= amount;
+  };
+
+  // Hybrid-mode rows are chain-verified against the LOP invalidator: refuted
+  // rows never reach us, "confirmed" is chain-live, "unverified" is
+  // indeterminate (verification budget / transport). Prefer confirmed; take an
+  // unverified row only when no confirmed one fits — the prepare's own
+  // liveness pre-flight is the backstop either way.
+  const confirmed = orders.find((o) => o.verification !== 'unverified' && fillable(o));
+  if (confirmed) return confirmed;
+
+  const unverified = orders.find(fillable);
+  if (unverified) {
+    console.warn(
+      `  ! picking a verification=unverified row (${unverified.orderHash}) — no confirmed row fits; ` +
+        'the venue reported it but the chain check was indeterminate. The prepare liveness pre-flight decides.',
+    );
+    return unverified;
   }
 
   fail(
@@ -110,25 +126,41 @@ function sameAddress(a: string, b: string): boolean {
 }
 
 /**
- * A forSelf artifact is ONE unsigned adapter call; the approvals it needs are
- * described in `forSelf.allowances` (spender: structurally the adapter), not
- * included as transaction legs. Size each approval from the order we picked;
- * refuse any allowance this script cannot size.
+ * A forSelf artifact is ONE unsigned adapter call; the grants it needs come as
+ * `approvals` entries (ch 0.4.x LOP prepares) carrying the unsigned approve
+ * payload, sized by the CLI at the signed-ratio cap. We do not trust that
+ * sizing blindly: every entry must name OUR adapter as spender, the order's
+ * taker asset as token, and an amount equal to the cap we compute
+ * independently from the signed order — refuse on any mismatch (a decaying
+ * auction, a stale row, or a shape drift all land here, before signing).
  */
-function approveExecution(
-  alw: Allowance,
+function approvalExecution(
+  ap: Approval,
   adapter: Address,
   order: Order,
   takingCap: bigint,
 ): Execution {
-  if (!sameAddress(alw.token, order.takerAsset)) {
+  if (!sameAddress(ap.spender, adapter)) {
     fail(
-      `cannot size allowance for ${alw.tokenRole} (${alw.token}, field ${alw.amountField}) — ` +
-        'only the taker-asset (CA premium) allowance is expected on a fill; inspect the artifact',
+      `approvals[] entry (${ap.tokenRole}) names spender ${ap.spender} != our adapter ${adapter} — REFUSE (safety)`,
     );
   }
+  if (!sameAddress(ap.token, order.takerAsset)) {
+    fail(
+      `cannot vet approval for ${ap.tokenRole} (${ap.token}) — ` +
+        'only the taker-asset (CA premium) grant is expected on a fill; inspect the artifact',
+    );
+  }
+  if (BigInt(ap.amount) !== takingCap) {
+    fail(
+      `CLI-sized grant ${ap.amount} != our signed-ratio cap ${takingCap.toString()} — ` +
+        'the fill would settle at a price we did not compute (decaying auction, or a changed order row); REFUSE',
+    );
+  }
+  // Build the leg ourselves from vetted fields; the artifact's unsignedTx is
+  // the same bytes, but encoding locally keeps the whitelist story auditable.
   return {
-    target: alw.token,
+    target: ap.token,
     value: 0n,
     callData: encodeFunctionData({
       abi: erc20Abi,
@@ -176,6 +208,11 @@ async function main(): Promise<void> {
 
   // Step 2 — decode + sanity-check the adapter binding
   const decoded = await decodeOrder(env.CORK_CHAIN_ID, order);
+  // A plain LOP order (extension 0x) decodes with no `jit` block at all — that
+  // is a legitimate book row, but not the shape our --for-self cover buy expects.
+  if (!decoded.jit) {
+    fail('order carries no Cork JIT extension — not a taker-cover-buy order');
+  }
   console.log(`recipe  : ${decoded.jit.recipe} (${decoded.jit.generation})`);
   console.log(`jit adap: ${decoded.jit.adapter}`);
   // The order's own `adapter` (the JIT LOP adapter, not OUR adapter) is a protocol address —
@@ -205,17 +242,14 @@ async function main(): Promise<void> {
   }
 
   // The taker-asset cap the CLI signs the fill against: the exact rounded-up
-  // signed ratio (takingAmount * fill / makingAmount, ceiling division).
+  // signed ratio (takingAmount * fill / makingAmount, ceiling division). We
+  // compute it independently and require the artifact to agree.
   const makingFull = asBigInt(order.makingAmount, asBigInt(order.remainingMakingAmount));
   const takingFull = asBigInt(order.takingAmount, asBigInt(order.remainingTakingAmount));
   if (makingFull === 0n) fail('order has no makingAmount — cannot size the premium cap');
   if (takingFull === 0n) fail('order has no takingAmount — cannot size the premium cap');
   const takingCap = (takingFull * amountBn + makingFull - 1n) / makingFull;
   console.log(`premium : cap ${takingCap.toString()} base units of ${order.takerAsset} (CA)`);
-
-  for (const alw of artifact.forSelf.allowances) {
-    console.log(`  approve ${alw.token} → ${artifact.forSelf.adapter} (${alw.kind}, ${alw.amountField})`);
-  }
 
   if (artifact.auction) {
     // A decaying auction prices the fill ABOVE the signed ratio until decay
@@ -226,14 +260,29 @@ async function main(): Promise<void> {
       `DECAYING AUCTION order — this script sizes the premium approval from the signed ratio, ` +
         `which is below the live auction price ` +
         `(current=${artifact.auction.current}, ceiling=${artifact.auction.ceiling}, floor=${artifact.auction.floor}). ` +
-        'Pick a non-auction order, or extend approveExecution to cap at the auction ceiling.',
+        'Pick a non-auction order, or extend approvalExecution to cap at the auction ceiling.',
     );
   }
 
-  // Step 4 — the batch: the approvals the artifact asks for, then the single
-  // adapter call.
+  // Cross-check the artifact's own sizing against the signed order.
+  if (artifact.requiredTakingAmount !== undefined && BigInt(artifact.requiredTakingAmount) !== takingCap) {
+    fail(
+      `artifact requiredTakingAmount ${artifact.requiredTakingAmount} != our signed-ratio cap ${takingCap.toString()} — ` +
+        'the CLI prices this fill differently than the signed order row we vetted; REFUSE',
+    );
+  }
+
+  // Step 4 — the batch: the grants the artifact states (vetted entry by
+  // entry), then the single adapter call.
+  const approvals = artifact.approvals ?? [];
+  if (approvals.length === 0) {
+    fail('artifact carries no approvals[] — cannot vet the grants this fill needs; inspect the artifact');
+  }
+  for (const ap of approvals) {
+    console.log(`  approve ${ap.token} → ${ap.spender} (${ap.kind} ${ap.amount}, ${ap.tokenRole}${ap.satisfied ? ', already satisfied' : ''})`);
+  }
   const executions: Execution[] = [
-    ...artifact.forSelf.allowances.map((alw) => approveExecution(alw, adapter, order, takingCap)),
+    ...approvals.map((ap) => approvalExecution(ap, adapter, order, takingCap)),
     { target: artifact.to, value: asBigInt(artifact.value), callData: artifact.calldata },
   ];
 

@@ -64,11 +64,13 @@ import {
 /**
  * 1inch v6 TakerTraits layout, verbatim from cork-cli `packages/core/src/orders.ts` and confirmed
  * by decomposing a live `taker-fill` artifact: bit 251 set means `args` is prefixed with a 20-byte
- * receiver for the maker asset, and the low 185 bits carry the taking-amount cap.
+ * receiver for the maker asset, and the low 184 bits carry the taking-amount cap
+ * (`TakerTraitsLib._AMOUNT_MASK` — cork-cli 0.4.0 fixed its own bound from 185 to 184 bits; the
+ * chain silently narrows anything wider, so reading bit 184 here would misreport the cap).
  */
 const TAKER_ARGS_HAS_RECEIVER_FLAG = 1n << 251n;
 const TAKER_MAKER_AMOUNT_FLAG = 1n << 255n;
-const TAKER_THRESHOLD_MAX = (1n << 185n) - 1n;
+const TAKER_THRESHOLD_MAX = (1n << 184n) - 1n;
 
 const LOP_FILL_ABI = parseAbi([
   'function fillOrderArgs((uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256) order, bytes32 r, bytes32 vs, uint256 amount, uint256 takerTraits, bytes args) returns (uint256 makingAmount, uint256 takingAmount, bytes32 orderHash)',
