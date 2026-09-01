@@ -16,7 +16,6 @@
  * Runtime path is fully typed through `services/cork-cli.ts`; this script is the
  * orchestration layer. Errors bubble as typed CorkError subclasses.
  */
-import { encodeFunctionData, erc20Abi } from 'viem';
 import type { Address, Hex } from 'viem';
 
 import { env } from '../config/env.js';
@@ -29,9 +28,14 @@ import {
   CorkError,
   CorkConflictError,
   CorkUnavailableError,
-  type Approval,
-  type Order,
 } from '../services/cork-cli.js';
+import {
+  approvalExecution,
+  asBigInt,
+  pickSellOrder,
+  sameAddress,
+  signedRatioCap,
+} from '../services/order-vetting.js';
 import { createSessionContext, GUARDED_BATCH_SIM_ABI, type Execution } from '../services/session.js';
 
 function fail(message: string): never {
@@ -78,104 +82,18 @@ function parseArgs(argv: string[]): { poolId: Hex; amount: string; dryRun: boole
   return { poolId: poolId as Hex, amount, dryRun };
 }
 
-function asBigInt(value: string | number | undefined, fallback = 0n): bigint {
-  if (value === undefined) return fallback;
-  return BigInt(value);
-}
-
-function pickSellOrder(orders: readonly Order[], amount: bigint): Order {
-  if (orders.length === 0) {
-    fail('orderbook returned no items — no resting asks for this poolId (Base pre-first-market? coordinate with bond.credit)');
-  }
-
-  const open = new Set(['OPEN', 'PARTIALLY_FILLED', 'open', 'partially_filled']);
-
-  const fillable = (order: Order): boolean => {
-    const side = (order.side ?? 'SELL').toUpperCase();
-    if (side !== 'SELL') return false;
-    if (order.status && !open.has(order.status)) return false;
-    const remaining = asBigInt(order.remainingMakingAmount, asBigInt(order.makingAmount));
-    return remaining >= amount;
-  };
-
-  // Hybrid-mode rows are chain-verified against the LOP invalidator: refuted
-  // rows never reach us, "confirmed" is chain-live, "unverified" is
-  // indeterminate (verification budget / transport). Prefer confirmed; take an
-  // unverified row only when no confirmed one fits — the prepare's own
-  // liveness pre-flight is the backstop either way.
-  const confirmed = orders.find((o) => o.verification !== 'unverified' && fillable(o));
-  if (confirmed) return confirmed;
-
-  const unverified = orders.find(fillable);
-  if (unverified) {
-    console.warn(
-      `  ! picking a verification=unverified row (${unverified.orderHash}) — no confirmed row fits; ` +
-        'the venue reported it but the chain check was indeterminate. The prepare liveness pre-flight decides.',
-    );
-    return unverified;
-  }
-
-  fail(
-    `no OPEN/PARTIALLY_FILLED SELL with remainingMakingAmount >= ${amount.toString()} — ` +
-      'wait for underwriter liquidity, post an RFQ, or lower --amount',
-  );
-}
-
-function sameAddress(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase();
-}
-
-/**
- * A forSelf artifact is ONE unsigned adapter call; the grants it needs come as
- * `approvals` entries (ch 0.4.x LOP prepares) carrying the unsigned approve
- * payload, sized by the CLI at the signed-ratio cap. We do not trust that
- * sizing blindly: every entry must name OUR adapter as spender, the order's
- * taker asset as token, and an amount equal to the cap we compute
- * independently from the signed order — refuse on any mismatch (a decaying
- * auction, a stale row, or a shape drift all land here, before signing).
- */
-function approvalExecution(
-  ap: Approval,
-  adapter: Address,
-  order: Order,
-  takingCap: bigint,
-): Execution {
-  if (!sameAddress(ap.spender, adapter)) {
-    fail(
-      `approvals[] entry (${ap.tokenRole}) names spender ${ap.spender} != our adapter ${adapter} — REFUSE (safety)`,
-    );
-  }
-  if (!sameAddress(ap.token, order.takerAsset)) {
-    fail(
-      `cannot vet approval for ${ap.tokenRole} (${ap.token}) — ` +
-        'only the taker-asset (CA premium) grant is expected on a fill; inspect the artifact',
-    );
-  }
-  if (BigInt(ap.amount) !== takingCap) {
-    fail(
-      `CLI-sized grant ${ap.amount} != our signed-ratio cap ${takingCap.toString()} — ` +
-        'the fill would settle at a price we did not compute (decaying auction, or a changed order row); REFUSE',
-    );
-  }
-  // Build the leg ourselves from vetted fields; the artifact's unsignedTx is
-  // the same bytes, but encoding locally keeps the whitelist story auditable.
-  return {
-    target: ap.token,
-    value: 0n,
-    callData: encodeFunctionData({
-      abi: erc20Abi,
-      functionName: 'approve',
-      args: [adapter, takingCap],
-    }),
-  };
-}
+// Order selection, cap math and grant vetting live in services/order-vetting.ts
+// (pure, unit-tested); a RefusalError thrown there reaches the catch at the
+// bottom and exits 1 with the same FAILED line fail() prints.
 
 async function main(): Promise<void> {
   const { poolId, amount, dryRun } = parseArgs(process.argv.slice(2));
   const amountBn = BigInt(amount);
 
-  if (!env.CORK_FOR_SELF_ADAPTER) fail('CORK_FOR_SELF_ADAPTER is required (deploy the adapter first)');
-  const adapter = env.CORK_FOR_SELF_ADAPTER as Address;
+  if (!env.CORK_FOR_SELF_ADAPTER || !isHex40(env.CORK_FOR_SELF_ADAPTER)) {
+    fail('CORK_FOR_SELF_ADAPTER must be a 0x-prefixed 20-byte address (deploy the adapter first)');
+  }
+  const adapter: Address = env.CORK_FOR_SELF_ADAPTER;
 
   const rpcUrl = env.CORK_RPC_URL ?? env.BASE_RPC_URL ?? env.ALCHEMY_RPC_URL;
   if (!rpcUrl) fail('CORK_RPC_URL (or BASE_RPC_URL / ALCHEMY_RPC_URL) is required');
@@ -241,14 +159,9 @@ async function main(): Promise<void> {
     );
   }
 
-  // The taker-asset cap the CLI signs the fill against: the exact rounded-up
-  // signed ratio (takingAmount * fill / makingAmount, ceiling division). We
-  // compute it independently and require the artifact to agree.
-  const makingFull = asBigInt(order.makingAmount, asBigInt(order.remainingMakingAmount));
-  const takingFull = asBigInt(order.takingAmount, asBigInt(order.remainingTakingAmount));
-  if (makingFull === 0n) fail('order has no makingAmount — cannot size the premium cap');
-  if (takingFull === 0n) fail('order has no takingAmount — cannot size the premium cap');
-  const takingCap = (takingFull * amountBn + makingFull - 1n) / makingFull;
+  // The taker-asset cap the CLI signs the fill against, computed independently
+  // from the order row so the artifact can be required to agree with it.
+  const takingCap = signedRatioCap(order, amountBn);
   console.log(`premium : cap ${takingCap.toString()} base units of ${order.takerAsset} (CA)`);
 
   if (artifact.auction) {
