@@ -195,6 +195,13 @@ export type Order = {
   orderHash: Hex;
   side: string;
   status: string;
+  /**
+   * Hybrid-mode label (ch 0.4.x): venue rows are chain-verified against the
+   * LOP invalidator; refuted rows are dropped before we see them, so this is
+   * "confirmed" or "unverified" (indeterminate — verification budget or a
+   * transport failure), never "refuted".
+   */
+  verification?: 'confirmed' | 'unverified';
   makerAsset: Address;
   takerAsset: Address;
   remainingMakingAmount?: string;
@@ -204,8 +211,12 @@ export type Order = {
   [k: string]: unknown;
 };
 
+/**
+ * `jit` is present only when the order carries the Cork JIT extension; a
+ * plain LOP order (extension `0x`) decodes without it.
+ */
 export type DecodedOrder = {
-  jit: {
+  jit?: {
     generation: string;
     adapter: Address;
     collateralAsset: Address;
@@ -218,22 +229,50 @@ export type DecodedOrder = {
 };
 
 /**
- * An allowance the CALLER must grant before broadcasting. The spender is
- * structurally `forSelf.adapter` — the artifact never names another spender.
- * `amountField` names the prepare input whose value is the amount;
- * `kind: "cap"` means the adapter sweeps back whatever it does not spend.
+ * Sizing metadata for an allowance the CALLER must grant before broadcasting.
+ * The spender is structurally `forSelf.adapter` — the artifact never names
+ * another spender. `amountField` names the prepare input whose value is the
+ * amount; `kind: "cap"` means the adapter sweeps back whatever it does not
+ * spend. On phoenix prepares (exercise) entries carry `token`; on LOP
+ * prepares (taker-fill, since ch 0.4.x) they do not — the grantable form
+ * lives in the artifact's `approvals`.
  */
 export type Allowance = {
   tokenRole: string;
   amountField: string;
   kind: 'exact' | 'cap';
+  token?: Address;
+};
+
+/**
+ * A required grant, stated in full by an LOP-order prepare (`data.approvals`,
+ * ch 0.4.x): holder/token/spender/amount plus the UNSIGNED approve payload.
+ * On a forSelf artifact the spender is the adapter, never the LOP. With an
+ * RPC resolved, `currentAllowance`/`satisfied` annotate live chain state and
+ * a confirmed-missing grant raises the `approval_missing` warning.
+ */
+export type Approval = {
+  role: string;
+  stage: string;
+  holder: Address;
   token: Address;
+  tokenRole: string;
+  spender: Address;
+  spenderRole: string;
+  mechanism: string;
+  amount: string;
+  kind: 'exact' | 'cap';
+  unsignedTx: { to: Address; calldata: Hex; value: string };
+  currentAllowance?: string;
+  satisfied?: boolean;
+  [k: string]: unknown;
 };
 
 /**
  * A prepared forSelf artifact is ONE unsigned transaction (`to`/`calldata`/
- * `value`), not a bundle: the approvals it needs are described in
- * `forSelf.allowances` for the caller to build, not included as legs.
+ * `value`), not a bundle: the grants it needs are stated in `approvals`
+ * (taker-fill) or described in `forSelf.allowances` (exercise) for the
+ * caller to build, not included as legs.
  */
 export type ForSelfArtifact = {
   kind: string;
@@ -241,15 +280,24 @@ export type ForSelfArtifact = {
   calldata: Hex;
   value: string;
   from: Address;
-  /** Unix seconds; the adapter's own deadline check — rebuild if it lapses. */
+  /** Unix seconds; the adapter's own deadline check — rebuild if it lapses.
+   * Top-level on exercise artifacts; under `forSelf` on taker-fill. */
   deadline?: string;
   forSelf: {
     adapter: Address;
-    functionName: string;
+    functionName?: string;
     selector: Hex;
     allowances: Allowance[];
     receiverPolicy?: string;
+    /** taker-fill only: the adapter pulls at most this much taker asset. */
+    pullCap?: string;
+    deadline?: string;
   };
+  /** taker-fill only (ch 0.4.x): every grant, with unsigned approve payloads. */
+  approvals?: Approval[];
+  /** taker-fill only: the signed-ratio amounts this fill settles at. */
+  requiredMakingAmount?: string;
+  requiredTakingAmount?: string;
   /**
    * Present when the underlying order is a Cork-native decaying-premium auction.
    * Re-simulate close to broadcast: the taker price falls toward `floor`.

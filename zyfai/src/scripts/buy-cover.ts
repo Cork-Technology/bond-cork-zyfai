@@ -16,7 +16,6 @@
  * Runtime path is fully typed through `services/cork-cli.ts`; this script is the
  * orchestration layer. Errors bubble as typed CorkError subclasses.
  */
-import { encodeFunctionData, erc20Abi } from 'viem';
 import type { Address, Hex } from 'viem';
 
 import { env } from '../config/env.js';
@@ -29,9 +28,14 @@ import {
   CorkError,
   CorkConflictError,
   CorkUnavailableError,
-  type Allowance,
-  type Order,
 } from '../services/cork-cli.js';
+import {
+  approvalExecution,
+  asBigInt,
+  pickSellOrder,
+  sameAddress,
+  signedRatioCap,
+} from '../services/order-vetting.js';
 import { createSessionContext, GUARDED_BATCH_SIM_ABI, type Execution } from '../services/session.js';
 
 function fail(message: string): never {
@@ -78,72 +82,18 @@ function parseArgs(argv: string[]): { poolId: Hex; amount: string; dryRun: boole
   return { poolId: poolId as Hex, amount, dryRun };
 }
 
-function asBigInt(value: string | number | undefined, fallback = 0n): bigint {
-  if (value === undefined) return fallback;
-  return BigInt(value);
-}
-
-function pickSellOrder(orders: readonly Order[], amount: bigint): Order {
-  if (orders.length === 0) {
-    fail('orderbook returned no items — no resting asks for this poolId (Base pre-first-market? coordinate with bond.credit)');
-  }
-
-  const open = new Set(['OPEN', 'PARTIALLY_FILLED', 'open', 'partially_filled']);
-
-  for (const order of orders) {
-    const side = (order.side ?? 'SELL').toUpperCase();
-    if (side !== 'SELL') continue;
-    if (order.status && !open.has(order.status)) continue;
-    const remaining = asBigInt(order.remainingMakingAmount, asBigInt(order.makingAmount));
-    if (remaining < amount) continue;
-    return order;
-  }
-
-  fail(
-    `no OPEN/PARTIALLY_FILLED SELL with remainingMakingAmount >= ${amount.toString()} — ` +
-      'wait for underwriter liquidity, post an RFQ, or lower --amount',
-  );
-}
-
-function sameAddress(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase();
-}
-
-/**
- * A forSelf artifact is ONE unsigned adapter call; the approvals it needs are
- * described in `forSelf.allowances` (spender: structurally the adapter), not
- * included as transaction legs. Size each approval from the order we picked;
- * refuse any allowance this script cannot size.
- */
-function approveExecution(
-  alw: Allowance,
-  adapter: Address,
-  order: Order,
-  takingCap: bigint,
-): Execution {
-  if (!sameAddress(alw.token, order.takerAsset)) {
-    fail(
-      `cannot size allowance for ${alw.tokenRole} (${alw.token}, field ${alw.amountField}) — ` +
-        'only the taker-asset (CA premium) allowance is expected on a fill; inspect the artifact',
-    );
-  }
-  return {
-    target: alw.token,
-    value: 0n,
-    callData: encodeFunctionData({
-      abi: erc20Abi,
-      functionName: 'approve',
-      args: [adapter, takingCap],
-    }),
-  };
-}
+// Order selection, cap math and grant vetting live in services/order-vetting.ts
+// (pure, unit-tested); a RefusalError thrown there reaches the catch at the
+// bottom and exits 1 with the same FAILED line fail() prints.
 
 async function main(): Promise<void> {
   const { poolId, amount, dryRun } = parseArgs(process.argv.slice(2));
   const amountBn = BigInt(amount);
 
-  if (!env.CORK_FOR_SELF_ADAPTER) fail('CORK_FOR_SELF_ADAPTER is required (deploy the adapter first)');
-  const adapter = env.CORK_FOR_SELF_ADAPTER as Address;
+  if (!env.CORK_FOR_SELF_ADAPTER || !isHex40(env.CORK_FOR_SELF_ADAPTER)) {
+    fail('CORK_FOR_SELF_ADAPTER must be a 0x-prefixed 20-byte address (deploy the adapter first)');
+  }
+  const adapter: Address = env.CORK_FOR_SELF_ADAPTER;
 
   const rpcUrl = env.CORK_RPC_URL ?? env.BASE_RPC_URL ?? env.ALCHEMY_RPC_URL;
   if (!rpcUrl) fail('CORK_RPC_URL (or BASE_RPC_URL / ALCHEMY_RPC_URL) is required');
@@ -176,6 +126,11 @@ async function main(): Promise<void> {
 
   // Step 2 — decode + sanity-check the adapter binding
   const decoded = await decodeOrder(env.CORK_CHAIN_ID, order);
+  // A plain LOP order (extension 0x) decodes with no `jit` block at all — that
+  // is a legitimate book row, but not the shape our --for-self cover buy expects.
+  if (!decoded.jit) {
+    fail('order carries no Cork JIT extension — not a taker-cover-buy order');
+  }
   console.log(`recipe  : ${decoded.jit.recipe} (${decoded.jit.generation})`);
   console.log(`jit adap: ${decoded.jit.adapter}`);
   // The order's own `adapter` (the JIT LOP adapter, not OUR adapter) is a protocol address —
@@ -204,18 +159,10 @@ async function main(): Promise<void> {
     );
   }
 
-  // The taker-asset cap the CLI signs the fill against: the exact rounded-up
-  // signed ratio (takingAmount * fill / makingAmount, ceiling division).
-  const makingFull = asBigInt(order.makingAmount, asBigInt(order.remainingMakingAmount));
-  const takingFull = asBigInt(order.takingAmount, asBigInt(order.remainingTakingAmount));
-  if (makingFull === 0n) fail('order has no makingAmount — cannot size the premium cap');
-  if (takingFull === 0n) fail('order has no takingAmount — cannot size the premium cap');
-  const takingCap = (takingFull * amountBn + makingFull - 1n) / makingFull;
+  // The taker-asset cap the CLI signs the fill against, computed independently
+  // from the order row so the artifact can be required to agree with it.
+  const takingCap = signedRatioCap(order, amountBn);
   console.log(`premium : cap ${takingCap.toString()} base units of ${order.takerAsset} (CA)`);
-
-  for (const alw of artifact.forSelf.allowances) {
-    console.log(`  approve ${alw.token} → ${artifact.forSelf.adapter} (${alw.kind}, ${alw.amountField})`);
-  }
 
   if (artifact.auction) {
     // A decaying auction prices the fill ABOVE the signed ratio until decay
@@ -226,14 +173,29 @@ async function main(): Promise<void> {
       `DECAYING AUCTION order — this script sizes the premium approval from the signed ratio, ` +
         `which is below the live auction price ` +
         `(current=${artifact.auction.current}, ceiling=${artifact.auction.ceiling}, floor=${artifact.auction.floor}). ` +
-        'Pick a non-auction order, or extend approveExecution to cap at the auction ceiling.',
+        'Pick a non-auction order, or extend approvalExecution to cap at the auction ceiling.',
     );
   }
 
-  // Step 4 — the batch: the approvals the artifact asks for, then the single
-  // adapter call.
+  // Cross-check the artifact's own sizing against the signed order.
+  if (artifact.requiredTakingAmount !== undefined && BigInt(artifact.requiredTakingAmount) !== takingCap) {
+    fail(
+      `artifact requiredTakingAmount ${artifact.requiredTakingAmount} != our signed-ratio cap ${takingCap.toString()} — ` +
+        'the CLI prices this fill differently than the signed order row we vetted; REFUSE',
+    );
+  }
+
+  // Step 4 — the batch: the grants the artifact states (vetted entry by
+  // entry), then the single adapter call.
+  const approvals = artifact.approvals ?? [];
+  if (approvals.length === 0) {
+    fail('artifact carries no approvals[] — cannot vet the grants this fill needs; inspect the artifact');
+  }
+  for (const ap of approvals) {
+    console.log(`  approve ${ap.token} → ${ap.spender} (${ap.kind} ${ap.amount}, ${ap.tokenRole}${ap.satisfied ? ', already satisfied' : ''})`);
+  }
   const executions: Execution[] = [
-    ...artifact.forSelf.allowances.map((alw) => approveExecution(alw, adapter, order, takingCap)),
+    ...approvals.map((ap) => approvalExecution(ap, adapter, order, takingCap)),
     { target: artifact.to, value: asBigInt(artifact.value), callData: artifact.calldata },
   ];
 
