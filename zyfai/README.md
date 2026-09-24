@@ -213,6 +213,11 @@ The JSON is auto-extracted from the adapter ABI post-deploy — never hand-edit 
 - CREATE2 salt: `keccak256("zyfai:CorkForSelfAdapter:v1")` — same address available on Arbitrum One if redeployed with identical params
 - Verified: [Basescan](https://basescan.org/address/0x4c0458cb8dcd2b9c7bda45e4d59a3060dce59e5e#code)
 - Source: [`Cork-Technology/cork-periphery@v0.1.1`](https://github.com/Cork-Technology/cork-periphery/tree/v0.1.1)
+- Generation: bound to the **`phoenix/v0.3-rc.1`** pool manager (`CORK()`). It serves every
+  market on that generation and none on `phoenix/v0.4-rc.1`; `ch` refuses the pairing
+  (`adapter_binding_mismatch`). Markets on the new generation need a second adapter — same
+  source, new constructor arguments — whitelisted beside this one. See
+  [`INTEGRATION.md`](../INTEGRATION.md), "Two generations, one adapter each".
 
 ### TargetRegistry entries required to BUY cover
 
@@ -249,9 +254,11 @@ npm run buy:cover -- --pool-id 0x… --amount <cST-base-units> --dry-run
 npm run buy:cover -- --pool-id 0x… --amount <cST-base-units>
 ```
 
-The script walks: `orderbook → decode order → prepare(--for-self) → simulate (require
-wouldRevert:false) → sendGuardedBatch → reconcile`. Bit-invalidator and decaying-auction are
-warned in-line. See [`src/scripts/buy-cover.ts`](src/scripts/buy-cover.ts).
+The script walks: `orderbook (ranked for the adapter) → decode order → prepare(--for-self) →
+batch pre-flight (eth_call of approvals + fill; the artifact-only simulate is advisory) →
+sendGuardedBatch → reconcile`. Bit-invalidator and decaying-auction are warned in-line; a row
+reserved for another fill sender never reaches the script. See
+[`src/scripts/buy-cover.ts`](src/scripts/buy-cover.ts).
 
 ### Discovery — what's registered on Cork today
 

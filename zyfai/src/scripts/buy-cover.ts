@@ -107,8 +107,10 @@ async function main(): Promise<void> {
   if (dryRun) console.log('mode    : --dry-run (stops after the batch pre-flight)');
   console.log('');
 
-  // Step 1 — find a resting SELL big enough
-  const orders = await queryOrderbook(env.CORK_CHAIN_ID, poolId);
+  // Step 1 — find a resting SELL big enough. The book is ranked for OUR
+  // ADAPTER: it is the address that calls the LOP on the forSelf route, so a
+  // reservation (allowedSender) is judged against it, not against the Safe.
+  const orders = await queryOrderbook(env.CORK_CHAIN_ID, poolId, adapter);
   const order = pickSellOrder(orders, amountBn);
   const remaining = asBigInt(order.remainingMakingAmount, asBigInt(order.makingAmount));
   console.log(`order   : ${order.orderHash}`);

@@ -46,11 +46,17 @@ export function pickSellOrder(
   }
 
   const open = new Set(['OPEN', 'PARTIALLY_FILLED', 'open', 'partially_filled']);
+  // A reservation is judged against the fill sender the book was read for —
+  // our adapter. "reserved-for-other" cannot fill (the LOP reverts
+  // PrivateOrder); bare "reserved" means the book was read without an
+  // account, so we cannot tell for whom. Only open or reserved-for-us rows go.
+  const unfillableReservation = new Set(['reserved', 'reserved-for-other']);
 
   const fillable = (order: Order): boolean => {
     const side = (order.side ?? 'SELL').toUpperCase();
     if (side !== 'SELL') return false;
     if (order.status && !open.has(order.status)) return false;
+    if (order.exclusivity && unfillableReservation.has(order.exclusivity)) return false;
     const remaining = asBigInt(order.remainingMakingAmount, asBigInt(order.makingAmount));
     return remaining >= amount;
   };

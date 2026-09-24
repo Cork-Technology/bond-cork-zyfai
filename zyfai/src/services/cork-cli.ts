@@ -202,6 +202,14 @@ export type Order = {
    * transport failure), never "refuted".
    */
   verification?: 'confirmed' | 'unverified';
+  /**
+   * Reservation, decoded locally from the signed makerTraits (ch 0.5.x+):
+   * `allowedSender` is null on an open order; `exclusivity` classifies the
+   * row against the fill sender passed as `--account` on the read — for our
+   * route that sender is the ADAPTER, the address that calls the LOP.
+   */
+  allowedSender?: string | null;
+  exclusivity?: string;
   makerAsset: Address;
   takerAsset: Address;
   remainingMakingAmount?: string;
@@ -213,11 +221,14 @@ export type Order = {
 
 /**
  * `jit` is present only when the order carries the Cork JIT extension; a
- * plain LOP order (extension `0x`) decodes without it.
+ * plain LOP order (extension `0x`) decodes without it. Since ch 0.6.0
+ * `generation` is the chain's generation label of the adapter the order names
+ * (e.g. `phoenix/v0.3-rc.1`) and `wire` the payload layout of that generation.
  */
 export type DecodedOrder = {
   jit?: {
     generation: string;
+    wire?: string;
     adapter: Address;
     collateralAsset: Address;
     referenceAsset: Address;
@@ -358,13 +369,23 @@ export async function queryDeriveCorkPool(input: {
   ]) as DerivedPool;
 }
 
-export async function queryOrderbook(chainId: number, poolId: Hex): Promise<Order[]> {
+/**
+ * The resting orders of one pool, ranked best-first for `account` (ch 0.6.0:
+ * `sort: "best"` is the default). `account` is the FILL SENDER the ranking
+ * classifies each row's reservation against — on the ForSelf route that is
+ * the adapter, because the adapter is what calls the LOP. Rows the sender
+ * cannot fill (reserved for someone else, maker not ready, foreign hook)
+ * ride under `excluded` and never reach `items`.
+ */
+export async function queryOrderbook(chainId: number, poolId: Hex, account?: Address): Promise<Order[]> {
+  const accountArgs = account ? ['--account', account] : [];
   const raw = run([
     'query',
     'orderbook',
     ...CHAIN(chainId),
     '--pool-id',
     poolId,
+    ...accountArgs,
     '--json',
   ]) as { items?: Order[] } | Order[];
   return Array.isArray(raw) ? raw : (raw.items ?? []);

@@ -110,6 +110,17 @@ test('pickSellOrder: skips BUY side, non-open status, and too-small remainders',
   assert.equal(picked.orderHash, good.orderHash);
 });
 
+test('pickSellOrder: skips a row reserved for another fill sender, takes one reserved for us', () => {
+  const forOther = sellOrder({ orderHash: `0x${'88'.repeat(32)}` as Hex, exclusivity: 'reserved-for-other' });
+  const unknownFor = sellOrder({ orderHash: `0x${'99'.repeat(32)}` as Hex, exclusivity: 'reserved' });
+  const forUs = sellOrder({ orderHash: `0x${'aa'.repeat(32)}` as Hex, exclusivity: 'reserved-for-account' });
+  const picked = pickSellOrder([forOther, unknownFor, forUs], 1n, () => {});
+  assert.equal(picked.orderHash, forUs.orderHash);
+  assert.throws(() => pickSellOrder([forOther, unknownFor], 1n, () => {}), RefusalError);
+  // An open row from an older tool (no exclusivity field) is still eligible.
+  assert.equal(pickSellOrder([forOther, sellOrder()], 1n, () => {}).orderHash, sellOrder().orderHash);
+});
+
 test('pickSellOrder: refuses an empty book and a book with nothing fillable', () => {
   assert.throws(() => pickSellOrder([], 1n, () => {}), RefusalError);
   assert.throws(
