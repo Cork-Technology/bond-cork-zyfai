@@ -5,24 +5,25 @@
 > EIP-712 / ERC-1271 signing, ERC-2612 permits, ERC-4626 vaults.
 > **Chain:** Base (8453) first; everything transfers to Arbitrum One (42161) by
 > changing the chain id and asset addresses.
-> **Pin:** Distribution [`phoenix/v0.3-rc.1`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.3-rc.1.json).
-> **Status:** updated 2026-09-01 against that pin (first written 2026-08-11
-> against `v0.1-rc.1`, re-pinned 2026-08-14 to `v0.2-rc.1`; what moved between
-> the pins is in the README's "Moving from v0.2-rc.1"). If the pin has moved
-> again, this document is orientation, not instruction — re-read the manifest
-> first.
+> **Pin:** Distribution [`phoenix/v0.4-rc.1`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.4-rc.1.json).
+> **Status:** updated 2026-09-24 against that pin (first written 2026-08-11
+> against `v0.1-rc.1`, re-pinned 2026-08-14 to `v0.2-rc.1` and 2026-09-01 to
+> `v0.3-rc.1`; what moved between the pins is in the README's "Moving from
+> v0.3-rc.1"). If the pin has moved again, this document is orientation, not
+> instruction — re-read the manifest first.
 
 This document sequences the integration. It does not duplicate the reference
 material: each step links the pinned document that carries the detail. The full
 teaching walkthrough — Cork's model, the glossary, every command in runnable
 form — is the
-[Zyfai quickstart](https://github.com/Cork-Technology/cork-cli/blob/v0.4.1/docs/zyfai-quickstart.md);
+[Zyfai quickstart](https://github.com/Cork-Technology/cork-cli/blob/v0.6.0/docs/zyfai-quickstart.md);
 this runbook is the spine that tells you what to do, in what order, and who owns
 what. One drift caveat, straight from the manifest: the tag-pinned quickstart is
-**orientation, not `v0.4.1` integration evidence** — its captured outputs date
-from `v0.2.0-rc.2`, and its rollover appendix is not evidence for the newly
-pinned rollover component. The standing rule absorbs this: pull authoritative
-values from `ch query`, never from prose.
+**orientation, not `v0.6.0` integration evidence** — most of its captured
+outputs date from `v0.2.0-rc.2` on the previous generation. Its generation
+notes and its exercise step (§3 step 4) were re-captured live in September
+2026. The standing rule absorbs the rest: pull authoritative values from
+`ch query`, never from prose.
 
 ## What you are integrating, in one paragraph
 
@@ -37,29 +38,79 @@ it doesn't exist yet. If the underlying impairs, your agent exercises the cST
 on-chain — a direct call that needs no counterparty, so it works exactly when
 the market is stressed. Full model and glossary: quickstart §1–§2.
 
+## Two generations, one adapter each
+
+Since this pin a chain hosts **two active contract generations**:
+`phoenix/v0.4-rc.1`, the primary, and `phoenix/v0.3-rc.1`, the previous one.
+Nothing is retired. Every pool the venue lists today lives on the previous
+generation; new markets are created on the primary.
+
+The pinned tool handles both. A read or prepare **by pool id follows the pool's
+own generation**, resolved from the chain. A prepare that is not pool-scoped
+targets the primary unless you pass `generation` — a label, or the alias
+`previous`. Every result names the generation it answered from in
+`data.generation`. `ch query protocol-config` lists every generation with each
+block's addresses; `cork_capabilities topic:"generations"` is the contract.
+
+A **ForSelf adapter serves exactly one generation.** Its binding is immutable:
+`CORK()` names one pool manager, and the constructor requires the whitelist
+manager of that same pool manager. Your deployed adapter is bound to
+`phoenix/v0.3-rc.1`. It fills and exercises there as before. For a pool on the
+primary the tool refuses `adapter_binding_mismatch` and builds nothing. To trade
+on the primary you deploy a second adapter, bound to the new pool manager, and
+whitelist it beside the first (step 7). One adapter address per generation;
+keep the old one whitelisted until your last `v0.3-rc.1` cover is exercised or
+expired.
+
 ## The path
 
-Work the steps in order. Each is small; nothing here should take a day.
+Work the steps in order. Each is small; nothing here should take a day. If you
+integrated against `v0.3-rc.1`, steps 1–4 are a re-read, and step 7 is the one
+with new work.
 
 | # | Step | Where the detail lives |
 |---|---|---|
-| 1 | **Read the manifest** for `phoenix/v0.3-rc.1`: components, chains, review level, known issues, external dependencies (1inch LOP v4, Bundler3, the CREATE2 factory). | [The manifest](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.3-rc.1.json) |
-| 2 | **Install `cork-cli` at the pinned tag** (`v0.4.1`) and add its MCP server to your agent. Verify the asset against the release's published checksums or attestation. | Quickstart §4 (the integration kit); [v0.4.1 release](https://github.com/Cork-Technology/cork-cli/releases/tag/v0.4.1) |
-| 3 | **Self-test the install.** A healthy install answers exactly **9 tools**; 8 are read-only, only `cork_submit` writes. Expected-failure reason codes (`chain_read_failed`, `unavailable`, …) are documented answers, not broken installs. | [cork-cli README](https://github.com/Cork-Technology/cork-cli/blob/v0.4.1/README.md) |
-| 4 | **Read live state on Base** — `ch query protocol-config`, registered assets, recipes. This is where addresses come from, every time. Venue-backed list reads run in **hybrid** mode: every row carries `verification: "confirmed" \| "unverified"`, and rows the chain refutes are dropped — prefer confirmed rows, and treat `unverified` as a labeled state, not an error. | Quickstart §3; [`ch` reference](https://github.com/Cork-Technology/cork-cli/blob/v0.4.1/docs/cli.md) |
-| 5 | **Walk the cover flow end to end** on Base: derive the market, open the RFQ (off-chain, through the tool — quickstart §3 step 1), verify and simulate the underwriter's order, then sign and broadcast the fill **from your own stack** — the tooling builds unsigned artifacts and relays venue postings; it never signs, never broadcasts a fill, never holds funds. Premium fields are fractions now: `premiumAnnualized` (`"0.041"` = 4.1%) is the one listing field; the legacy percent `premium` is refused. An unanswered RFQ means no underwriter is quoting that pair yet — coordination, not an error; raise it. Confirm the RFQ package catalog and notional units with Cork before the first post. | Quickstart §2–§3 |
-| 6 | **Read quickstart §5 (Risks & ownership) in full** before touching the whitelist. Items A–C are the security core: the receiver argument your whitelist can't see, the pool whitelist being off by construction, and which spender each approval goes to. D–G (no slippage guard on exercise, REF pauses freezing cover, reconcile discipline, address drift) shape your monitoring. | Quickstart §5 |
-| 7 | **Deploy your own receiver-forcing adapter** from `cork-periphery v0.1.3-rc.1` (`CorkForSelfAdapter` is the one to deploy: one address to audit, whitelist and approve — 14 entrypoints, the 13 pool actions plus `fillOrderForSelf`; its source is unchanged since `v0.1.1`, so an adapter already deployed from that tag stays valid). Extending your own `*ForSelf`/AdapterProxy to the same shape is the documented alternative. Audit and vet it first — see the trust boundary below. | [`cork-periphery`](https://github.com/Cork-Technology/cork-periphery/tree/v0.1.3-rc.1) README; quickstart §6 item 2 |
-| 8 | **Whitelist the adapter's selectors in your Guarded Executor** — and only those. The adapter exists because your whitelist constrains contract + function, not arguments. Wire the approvals for your route (adapter route: CA/REF/cST to the adapter, nothing to the LOP or pool manager). Two machine-readable surfaces state the grants: LOP-order prepares (the fill) carry `data.approvals` — holder, token, spender, amount, and the unsigned approve payload, annotated against live allowances when an RPC resolves — and every forSelf artifact (exercise included) names its per-action sizing inputs in `data.forSelf.allowances`. Build your approval legs from them. | `cork-periphery` README ("The problem these solve", allowance matrix); quickstart §5 item C, §6 item 3 |
-| 9 | **Run one full cover cycle at pilot size** — buy cover, hold, exercise or let expire, reconcile via `ch track` and the venue API. Simulate every artifact before signing. | Quickstart §3, §6; [API docs](https://api-phoenix.cork.tech/docs) |
+| 1 | **Read the manifest** for `phoenix/v0.4-rc.1`: components, chains, review level, known issues, external dependencies (1inch LOP v4, Bundler3, Permit2). | [The manifest](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.4-rc.1.json) |
+| 2 | **Install `cork-cli` at the pinned tag** (`v0.6.0`) and add its MCP server to your agent. Verify the asset against the release's `checksums.txt` or its build attestation. | Quickstart §4 (the integration kit); [v0.6.0 release](https://github.com/Cork-Technology/cork-cli/releases/tag/v0.6.0) |
+| 3 | **Self-test the install.** A healthy install answers exactly **9 tools**; 8 are read-only, only `cork_submit` writes. Expected-failure reason codes (`pool_not_found`, `unavailable`, …) are documented answers, not broken installs. | [cork-cli README](https://github.com/Cork-Technology/cork-cli/blob/v0.6.0/README.md) |
+| 4 | **Read live state on Base** — `ch query protocol-config` (both generations, every block's addresses and wire), registered assets, recipes. This is where addresses come from, every time. Then read your own positions: `ch query account-state --account <safe>` with no pool id lists your cST/cPT across every generation, with expiry and generation per row. Venue-backed list reads run in **hybrid** mode: every row carries `verification: "confirmed" \| "unverified"`, and rows the chain refutes are dropped — prefer confirmed rows, and treat `unverified` as a labeled state, not an error. | Quickstart §3; [`ch` reference](https://github.com/Cork-Technology/cork-cli/blob/v0.6.0/docs/cli.md); `cork_capabilities topic:"migration"` |
+| 5 | **Walk the cover flow end to end** on Base: derive the market, open the RFQ (off-chain, through the tool — quickstart §3 step 1), verify and simulate the underwriter's order, then sign and broadcast the fill **from your own stack** — the tooling builds unsigned artifacts and relays venue postings; it never signs, never broadcasts a fill, never holds funds. Three rules learned from your first live trade (2026-09-10): send the full `oracle_params` block with an inline market template (`cork-inline-liquidity/1`: `schema`, `anchor_rate`, `expiry`, `swap_fee_wad`, `unwind_swap_fee_wad` — an empty block gets quoted but never rested); read the book with **your adapter as `filters.account`**, so the ranked view classifies each order's reservation against the address that will call the LOP; and treat a reserved order as unfillable on your route — see "Reserved orders" below. `premiumAnnualized` (`"0.041"` = 4.1%) is the one listing field; the legacy percent `premium` is refused. An unanswered RFQ means no underwriter is quoting that pair yet — coordination, not an error; raise it. | Quickstart §2–§3; `cork_capabilities topic:"orders"` |
+| 6 | **Read quickstart §5 (Risks & ownership) in full** before touching the whitelist. Items A–C are the security core: the receiver argument your whitelist can't see, the pool whitelist being off by construction, and which spender each approval goes to. D–G (no slippage guard on exercise, REF pauses freezing cover, reconcile discipline, address and generation drift) shape your monitoring. | Quickstart §5 |
+| 7 | **Deploy your receiver-forcing adapter for the primary generation** from `cork-periphery v0.2.0-rc.1` (`CorkForSelfAdapter`: 14 entrypoints, the 13 pool actions plus `fillOrderForSelf`; the ForSelf source is unchanged since `v0.1.1`, so the adapter you deployed from that tag is the same code — **but its binding is to the previous generation**). Constructor: `(cork, whitelistManager, lop)` — the primary's pool manager and whitelist manager, read live from `ch query protocol-config`, and the chain's LOP; the constructor checks `whitelistManager.CORK_POOL_MANAGER() == cork`. The package ships no deploy script: deploy with your own reviewed tooling, then read `CORK()`, `WHITELIST()` and `LOP()` back from the chain and record the code hash. Audit and vet it first — see the trust boundary below. | [`cork-periphery`](https://github.com/Cork-Technology/cork-periphery/tree/v0.2.0-rc.1) README ("Deploying"); quickstart §6 item 2 |
+| 8 | **Whitelist each adapter's selectors in your Guarded Executor** — and only those. The selectors are the same on both adapters; the target address differs per generation. The adapter exists because your whitelist constrains contract + function, not arguments. Wire the approvals for your route (adapter route: CA/REF/cST to the adapter, nothing to the LOP or pool manager). Two machine-readable surfaces state the grants: LOP-order prepares (the fill) carry `data.approvals` — holder, token, spender, amount, and the unsigned approve payload, annotated against live allowances when an RPC resolves — and every forSelf artifact (exercise included) names its per-action sizing inputs in `data.forSelf.allowances`. Build your approval legs from them. | `cork-periphery` README ("The problem these solve", allowance matrix); quickstart §5 item C, §6 item 3 |
+| 9 | **Run the exercise leg.** The buy leg ran live on 2026-09-10 (Base mainnet, test size); the cover expired unexercised. The next test is an exercise before expiry, or a rollover. Size it with `ch compute cst-swap-rate`, build it with `ch exercise --for-self`, dry-run it with `ch track simulate`, then gate the broadcast on an `eth_call` of the whole guarded batch (approvals plus the adapter call). Reconcile via `ch track reconcile` — one `--subject` per call, the receipt then the order — and the venue API. | Quickstart §3 step 4, §6; [API docs](https://api-phoenix.cork.tech/docs) |
 | 10 | **Close the loop with Cork** — the checklist at the bottom of this document, both directions. | Below |
+
+## Reserved orders — what Cork does about the adapter
+
+An underwriter may reserve a resting order for one fill sender (the LOP's
+`allowedSender`). The LOP compares that address with the address that **calls**
+it. On your route that caller is your adapter, not your Safe. So an order
+reserved for your Safe is unfillable for you.
+
+What the pinned tool does:
+
+- The venue's RFQ record carries no fill-sender field (cork-api `0.4.3`), so an
+  underwriter answering through the tool (`answer-rfq`) cannot learn your
+  adapter address from the request. The tool then builds the answer **open**
+  and says so (`fill_sender_unknown`); it never guesses a reservation. An
+  underwriter who knows your adapter can pass it as `fillSender` and reserve
+  the order for it.
+- Your book read, with the adapter as `filters.account`, classifies every row:
+  an order reserved for another sender is listed under `excluded`, never
+  ranked. A fill prepare for such a row refuses `private_order` with no bytes.
+
+If a quote you accepted rests reserved for your Safe, tell us: the fix is on the
+underwriter's side (rest it open, or reserve it for your adapter). We track the
+venue-side field that would close this gap.
 
 ## The trust boundary — you own your adapter
 
 Cork deploys nothing into your trust path. `cork-periphery` ships **reference**
 adapters; you audit, vet and deploy your own copy under your own name. The
-manifest's `cork-periphery` entry records Cork's reference deployment **so you
-can diff your deployment against it** — not so you can whitelist Cork's.
+manifest's `cork-periphery` entry records Cork's reference deployment for each
+generation **so you can diff your deployment against it** — not so you can
+whitelist Cork's.
 
 The standard these contracts are written to, stated once and worth keeping:
 **"Zyfai-owned" is the trust anchor, not the safety property.** The safety
@@ -82,46 +133,44 @@ Two exposures the adapter deliberately does **not** close, so plan for them:
 Stated in the manifest; repeated here so nobody discovers it late:
 
 - **`partner-preview`, review level `unreviewed`, no audits.** Best-effort
-  support, no production commitment. The cross-component integration suite was
-  waived again for this cut — this time as an explicit owner exception
-  (COR-172, 2026-08-21) that overrides `v0.2-rc.1`'s statement that its waiver
-  was final; a separate runner is being developed, and the manifest says the
-  waiver must not be copied silently into another cut. The nearest evidence is
-  per-component release gates (signed builds, checksums, attestations, smokes,
-  on-chain bytecode verification), plus the Distribution's own live-surface
-  verification — none of it is represented as a cross-component run.
-- **Rollover is pinned, not proven.** The rollover component `0.1.0-rc.2`
-  joins with its paired singleton stack and BaseFiller, verified byte-identical
-  to the deployed runtime bytecode **on both chains** — but **no end-to-end
-  rollover run is claimed**, its API route family is outside cork-api's covered
-  route list, and `EvcRolloverAdapter` plus the per-holder
-  `CorkRolloverContract` clones are outside the pin. The mechanics and the
-  role split (a cPT-holder signs the order; you are the filler) are taught in
-  the quickstart's "After the flow" appendix — with two corrections this pin
-  makes to that appendix: its "settlers on Arbitrum One only, Base
-  forward-looking" note is **stale** (the rc.2 stack is deployed and pinned on
-  both chains — the manifest wins), and the tool still builds only the
-  **supply side** (`rollover-intent` / `rollover-order`); the filler
-  transaction stays in Zyfai's stack. Cover a position, exercise or expire; do
-  not design around renewal being production-ready yet.
-- **Admin and operational timelocks run at a 0-second delay** — a documented
-  fact of this partner-preview deployment.
+  support, no production commitment. The cross-component integration suite is
+  recorded as **neither passed nor waived**: the manifest says the final
+  pinned-set integration run on both chains remains a cut gate, and that no
+  earlier waiver is inherited. The nearest evidence is per-component: signed
+  builds, checksums, attestations, the finalized deployment reconciliation on
+  both chains, and the tool's own fork rehearsal of a JIT fill on the new set.
+  None of it is represented as a cross-component run. Read `support` and
+  `knownIssues` from the manifest itself; they change in place.
+- **Rollover is pinned, not proven.** Rollover `0.2.0` joins with its paired
+  singleton stack and BaseFiller on both chains. It adds `oracleSalt` to the
+  JIT commitment (a new signed typehash); the order data is unchanged, and the
+  venue admits both settler generations. **No end-to-end rollover run is
+  claimed**, its API route family is outside cork-api's covered route list, and
+  the per-holder `CorkRolloverContract` clones are outside the pin. The
+  mechanics and the role split (a cPT-holder signs the order; you are the
+  filler) are taught in the quickstart's "After the flow" appendix; the tool
+  builds only the **supply side** (`rollover-intent` / `rollover-order`), and
+  the filler transaction stays in Zyfai's stack. Cover a position, exercise or
+  expire; do not design around renewal being production-ready yet.
 - **Deployed on both chains; integrate on Base first.** Base is where the
   partner path is proven; Arbitrum One carries the same addresses.
 
 If any of these change, the notice channel is GitHub Releases on the pinned
-repositories — breaking changes to a documented surface open a new Distribution
-line, announced in advance. This cut itself carried covered breaking changes
-under a recorded owner exception to that rule; the exception does not make them
-non-breaking, which is exactly why the manifest spells them out.
+repositories. This cut breaks every covered surface; the manifest spells the
+changes out, and the README's "Moving from v0.3-rc.1" carries the ones a
+demand-side integrator meets.
 
 ## Do not
 
 - **Do not hardcode addresses** — not in code, not in docs, not in agent
   context. Read the manifest, or read live (`ch query protocol-config`).
   Retired deployments still answer calls and decode into plausible nonsense.
+- **Do not point an adapter at a market of the other generation.** The tool
+  refuses the pairing (`adapter_binding_mismatch`); the on-chain call would
+  revert. One adapter per generation, and check `data.generation` on every
+  pool read before you prepare through an adapter.
 - **Do not whitelist raw `CorkPoolManager` or the raw 1inch LOP** in your
-  executor. Whitelist your deployed adapter's selectors instead.
+  executor. Whitelist your deployed adapters' selectors instead.
 - **Do not approve cST (or cPT) to the pool manager.** Such an approval can
   never legitimately be spent — the pool manager's internal transfer path skips
   the allowance check when the token's owner is the caller — so it only sits
@@ -132,13 +181,14 @@ non-breaking, which is exactly why the manifest spells them out.
 - **Do not send the legacy percent `premium` field anywhere.** The venue
   removed it on 2026-08-17 and `cork-cli` refuses it locally with the fraction
   to send instead. `premiumAnnualized` is the one premium field.
+- **Do not send an empty `oracle_params` block with an inline market
+  template.** The underwriter cannot derive a market from it; the RFQ gets
+  quoted but no order comes to rest. The full block is in the quickstart.
 - **Do not infer the chain from an address.** Cross-chain address identity is a
   CREATE2 property, not a chain signal; select the chain explicitly.
 - **Do not trust any document over the manifest** on versions or addresses —
   and **never copy an address out of a doc's example output**, however fresh
-  the capture. The pinned quickstart's captures predate this pin's tool; the
-  rule exists so that never matters: pull authoritative values from `ch query`,
-  never from prose.
+  the capture. Pull authoritative values from `ch query`, never from prose.
 - **Do not use anything from this repository's git history.** The pre-August
   material targets deleted entrypoints and dead deployments.
 
@@ -146,11 +196,13 @@ non-breaking, which is exactly why the manifest spells them out.
 
 What Zyfai does:
 
-1. Read the manifest; confirm the pin (`phoenix/v0.3-rc.1`) in your own notes.
-2. Install `cork-cli@v0.4.1`, add the MCP server, pass the 9-tool self-test.
-3. Run the read/derive/prepare flow on Base against live state.
-4. Audit and deploy your `CorkForSelfAdapter`; whitelist its selectors only.
-5. Run one full cover cycle at pilot size and reconcile it.
+1. Read the manifest; confirm the pin (`phoenix/v0.4-rc.1`) in your own notes.
+2. Install `cork-cli@v0.6.0`, add the MCP server, pass the 9-tool self-test.
+3. Read your positions across both generations; run the read/derive/prepare
+   flow on Base against live state.
+4. Audit and deploy your `CorkForSelfAdapter` for the primary generation;
+   whitelist its selectors beside the existing adapter's.
+5. Run the exercise leg on a live cover, at pilot size, and reconcile it.
 
 What Cork needs back:
 
@@ -158,8 +210,12 @@ What Cork needs back:
    constrains contract + function but not arguments. The adapter design rests
    on this; if it's wrong in either direction, say so before deploying.
 2. **The pilot asset list** — the 3–4 USDC pools, drawn from your exclusion
-   list, that the first markets should cover.
+   list, that the first markets should cover. Your first trade covered
+   USDC / ycsUSDC; confirm it and name the others.
 3. **Adapter ownership and timeline** — who audits and deploys your adapter
-   copy, and when, so market seeding can be scheduled against it.
-4. **Anything that reads wrong in the pinned docs** — file it on the relevant
+   copies, and when, so market seeding on the primary can be scheduled against
+   the second adapter.
+4. **When you plan the first exercise** — so an underwriter can rest a market
+   with enough time to expiry.
+5. **Anything that reads wrong in the pinned docs** — file it on the relevant
    repository, or raise it directly. Security findings: security@cork.tech.

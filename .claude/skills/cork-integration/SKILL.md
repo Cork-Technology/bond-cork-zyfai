@@ -1,9 +1,9 @@
 ---
 name: cork-integration
-description: Operate Cork Distribution phoenix/v0.3-rc.1 through the cork-cli MCP server — read protocol state, derive markets, build and verify unsigned order artifacts, and run the cover flow. Use for any task that touches Cork markets, cST/cPT, quotes, orders, fills, or exercise.
+description: Operate Cork Distribution phoenix/v0.4-rc.1 through the cork-cli MCP server — read protocol state, derive markets, build and verify unsigned order artifacts, and run the cover flow. Use for any task that touches Cork markets, cST/cPT, quotes, orders, fills, or exercise.
 ---
 
-# Operating Cork phoenix/v0.3-rc.1
+# Operating Cork phoenix/v0.4-rc.1
 
 This skill replaces the retired `cork-operations` skill, whose address book
 pointed at deployments that no longer exist. This skill deliberately carries
@@ -12,9 +12,9 @@ reads live state, so the skill's job is wiring, sequencing, and guardrails.
 
 ## Setup
 
-Requires the cork-cli MCP server at the pinned tag **`v0.4.1`**. Install
+Requires the cork-cli MCP server at the pinned tag **`v0.6.0`**. Install
 and MCP registration:
-[quickstart §"the integration kit"](https://github.com/Cork-Technology/cork-cli/blob/v0.4.1/docs/zyfai-quickstart.md).
+[quickstart §"the integration kit"](https://github.com/Cork-Technology/cork-cli/blob/v0.6.0/docs/zyfai-quickstart.md).
 Never treat an address printed in any doc as current, however fresh the
 capture; read addresses live.
 Self-test: a healthy install answers **exactly 9 tools**. If it doesn't, fix
@@ -27,7 +27,8 @@ Nine tools; the taxonomy is the trust model:
 - `cork_query` — read live chain + venue state. `cork_compute` — deterministic
   math over verified state. `cork_decode` — bytes to labelled JSON.
   `cork_capabilities` — the searchable manual (its doc topics — `signing`,
-  `modes`, `units`, `warnings` — carry the envelope and unit contracts).
+  `modes`, `units`, `warnings`, `orders`, `generations`, `migration` — carry
+  the envelope, unit, order and generation contracts).
   `cork_track` — verify, simulate, reconcile. All read-only.
 - `cork_prepare_phoenix` / `cork_prepare_orders` / `cork_prepare_market` —
   build **unsigned** bytes or typed data for later signing. They execute
@@ -45,7 +46,7 @@ Signing and key custody stay in the caller's stack, always.
    come from `cork_query` at the moment of use. Anything remembered from a doc,
    a prior session, or this repository's history is presumed stale.
 3. **The manifest is the authority on versions.**
-   [`phoenix/v0.3-rc.1`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.3-rc.1.json)
+   [`phoenix/v0.4-rc.1`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.4-rc.1.json)
    pins the set. If a tool, doc, or API self-reports something that contradicts
    it, stop and surface the mismatch instead of picking a side silently.
 4. **Verify before submit.** Run the `cork_track` verification/simulation on a
@@ -57,7 +58,7 @@ Signing and key custody stay in the caller's stack, always.
    Note `cork_submit` relays venue postings (RFQs, orders) — a *fill* is
    signed and broadcast from the caller's own stack, never through the tool.
 5. **A reason code is an answer, not an error.** `unavailable`,
-   `chain_read_failed`, `roles_not_granted` and similar are documented states —
+   `pool_not_found`, `roles_not_granted` and similar are documented states —
    report them as findings; do not retry-loop or fabricate the missing result.
 6. **Honor the hybrid verification labels.** Venue-backed list reads run in
    `hybrid` mode: each row carries `verification: "confirmed" | "unverified"`,
@@ -74,6 +75,23 @@ Signing and key custody stay in the caller's stack, always.
 9. **Chain is explicit.** Both chains share addresses; every query and every
    prepared artifact names its chain id. Base (8453) is the default working
    chain for this integration.
+10. **Generation is explicit too.** A chain hosts two active generations,
+    `phoenix/v0.4-rc.1` (primary) and `phoenix/v0.3-rc.1` (previous). A read of
+    an existing pool follows the pool; a prepare targets the primary unless
+    `generation` is set (a label, or the alias `previous`). Every result names
+    the generation it answered from (`data.generation`); read it before you act.
+    `cork_capabilities topic:"generations"` is the contract,
+    `topic:"migration"` the exit-and-re-enter recipe.
+11. **A ForSelf adapter serves one generation.** Zyfai's deployed adapter is
+    bound to the `phoenix/v0.3-rc.1` pool manager. Fill or exercise through it
+    only on pools whose `data.generation` is `phoenix/v0.3-rc.1`. For a pool on
+    the primary, the tool refuses `adapter_binding_mismatch` and builds nothing;
+    report that, do not route around it. A second adapter, bound to the primary,
+    is the fix (runbook step 7).
+12. **Rank the book for the adapter.** On `cork_query orderbook`, pass the
+    adapter as `filters.account`: the ranked view then classifies each row's
+    reservation against the address that will call the LOP — the adapter, not
+    the Safe — and lists rows the adapter cannot fill under `excluded`.
 
 ## Escalation
 

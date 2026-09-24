@@ -3,14 +3,14 @@
 ## What this repository is
 
 Zyfai's workspace for integrating Cork cover, pinned to Distribution
-**`phoenix/v0.3-rc.1`**. `zyfai/` is Zyfai's own code. `INTEGRATION.md` is the
+**`phoenix/v0.4-rc.1`**. `zyfai/` is Zyfai's own code. `INTEGRATION.md` is the
 runbook — read it before doing any integration work. `README.md` maps the
 pinned reference material.
 
 ## Hard rules
 
 1. **The manifest is the authority.**
-   [`distributions/phoenix/v0.3-rc.1.json`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.3-rc.1.json)
+   [`distributions/phoenix/v0.4-rc.1.json`](https://github.com/Cork-Technology/distribution/blob/main/distributions/phoenix/v0.4-rc.1.json)
    in `Cork-Technology/distribution` names every version, address, codehash and
    known issue. Where any document, code comment or memory disagrees with it,
    the manifest wins. Read living fields (`stage`, `reviewLevel`, `status`,
@@ -30,11 +30,20 @@ pinned reference material.
    propose flows where the tooling signs or custodies funds.
 5. **Do not edit `zyfai/` unless the task explicitly asks for it.** It is
    Zyfai's production-path code, not shared scaffolding.
+6. **Name the generation you act on.** Since this pin a chain hosts two active
+   contract generations: `phoenix/v0.4-rc.1` (the primary) and
+   `phoenix/v0.3-rc.1` (the previous one). A read of an existing pool follows
+   the pool's own generation. A prepare targets the primary unless you pass
+   `generation` (a label, or the alias `previous`). Every result names the
+   generation it answered from in `data.generation`; check it before you act.
+   Zyfai's deployed `CorkForSelfAdapter` is bound to `phoenix/v0.3-rc.1`; it
+   cannot serve a market on the primary. The tool refuses that pairing
+   (`adapter_binding_mismatch`); do not work around the refusal.
 
 ## Operating Cork
 
 Use the [`cork-integration`](./.claude/skills/cork-integration/SKILL.md) skill.
-It wires the cork-cli MCP server (pinned tag `v0.4.1`) and carries the
+It wires the cork-cli MCP server (pinned tag `v0.6.0`) and carries the
 decision rules. The tool surface is self-documenting: start any unfamiliar task
 with `cork_capabilities`, not with a guess.
 
