@@ -134,9 +134,9 @@ Stated in the manifest; repeated here so nobody discovers it late:
 
 - **`partner-preview`, review level `unreviewed`, no audits.** Best-effort
   support, no production commitment. The cross-component integration suite is
-  recorded as **neither passed nor waived**: the manifest says the final
-  pinned-set integration run on both chains remains a cut gate, and that no
-  earlier waiver is inherited. The nearest evidence is per-component: signed
+  **waived, not passed**: the Distribution owner waived it on 2026-09-25
+  because no cross-component integration runner exists yet (deviation D10 in
+  the manifest). No passing integration run is claimed. The nearest evidence is per-component: signed
   builds, checksums, attestations, the finalized deployment reconciliation on
   both chains, and the tool's own fork rehearsal of a JIT fill on the new set.
   None of it is represented as a cross-component run. Read `support` and
